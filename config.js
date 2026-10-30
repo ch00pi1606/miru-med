@@ -25,8 +25,8 @@ window.MIRU_CONFIG = {
                      proyectos antiguos, la «anon public». Es pública por
                      diseño: lo que protege los datos son las reglas del SQL. */
   supabase: {
-    url: '',            // ← pega aquí la Project URL (https://xxxxxxxx.supabase.co)
-    clavePublica: ''    // ← pega aquí la Publishable key (sb_publishable_…)
+    url: 'https://vtfjtuvcluanhulvdpqe.supabase.co',            // ← pega aquí la Project URL (https://xxxxxxxx.supabase.co)
+    clavePublica: 'sb_publishable_HPKRA8NpmgeaJaNkohOkZg_43kz81wC'    // ← pega aquí la Publishable key (sb_publishable_…)
   },
 
   /* Curso que abre esta publicación (tabla public.cursos). */
