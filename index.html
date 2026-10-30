@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>miru · Cirugía I</title>
+<meta name="description" content="miru: planificador de estudio de Cirugía I. Láminas explicadas, pasitos, flashcards y simulacros con revisión.">
+<meta name="theme-color" content="#fdf8f4">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="miru.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="miru-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="miru">
+<link rel="stylesheet" href="miru.css">
+</head>
+<body>
+<a class="saltar" href="#lienzo">Saltar al contenido</a>
+
+<div class="app">
+  <aside class="lateral" id="lateral" aria-label="Navegación">
+    <div class="lateral__marca">
+      <a href="#/" class="marca"><span class="marca__logo" aria-hidden="true">miru</span></a>
+      <p class="marca__s">Cirugía I · planificador</p>
+    </div>
+    <nav class="lateral__nav" id="nav"></nav>
+    <div class="lateral__pie"><span id="pie-version"></span></div>
+  </aside>
+
+  <main class="principal">
+    <header class="cabecera">
+      <button class="btn btn--icono menuBtn" data-acc="menu" type="button" aria-label="Abrir menú" aria-controls="lateral" aria-expanded="false">☰</button>
+      <nav class="miga" id="miga" aria-label="Estás en"></nav>
+      <div class="cabecera__d">
+        <a class="chip-perfil" id="chipPerfil" href="#/perfil" aria-label="Mi perfil"></a>
+        <button class="btn btn--icono" data-acc="tema" type="button" aria-label="Cambiar tema">🌙</button>
+      </div>
+    </header>
+    <div class="lienzo" id="lienzo" tabindex="-1"><p class="cargando">Abriendo miru…</p></div>
+  </main>
+</div>
+
+<dialog id="dialogo" aria-labelledby="dialogo-titulo">
+  <form method="dialog" class="dialogo-caja">
+    <h2 id="dialogo-titulo"></h2>
+    <p id="dialogo-texto"></p>
+    <label id="dialogo-campo" class="campo" hidden><input type="text" autocomplete="off"></label>
+    <div class="dialogo-botones">
+      <button value="cancelar" class="boton boton-suave" id="dialogo-cancelar">Cancelar</button>
+      <button value="aceptar" class="boton" id="dialogo-aceptar">Aceptar</button>
+    </div>
+  </form>
+</dialog>
+
+<noscript><p class="aviso">miru necesita JavaScript. Actívalo y vuelve a abrir la página.</p></noscript>
+
+<!-- CONFIGURACIÓN -->
+<script src="config.js"></script>
+
+<!-- MOTOR (sin contenido médico) -->
+<script src="nucleo.js"></script>
+<script src="fuentes.js"></script>
+<script src="formato.js"></script>
+<script src="progreso.js"></script>
+<script src="almacen.js"></script>
+<script src="contenido.js"></script>
+<script src="ui.js"></script>
+<script src="preguntas.js"></script>
+<script src="pasitos.js"></script>
+<script src="evaluacion.js"></script>
+<script src="flashcards.js"></script>
+<script src="esquemas.js"></script>
+<script src="casos.js"></script>
+<script src="oral.js"></script>
+<script src="laminas.js"></script>
+<script src="vistas.js"></script>
+<script src="admin.js"></script>
+
+<!-- CONTENIDO: índice de archivos (modo abierto) o paquete cifrado (publicación) -->
+<script src="paquete.js?v=2026.10.29-1"></script>
+
+<!-- ARRANQUE -->
+<script src="app.js"></script>
+</body>
+</html>
