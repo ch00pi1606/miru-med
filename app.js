@@ -13,12 +13,13 @@
   /* ------------------------------------------------------------- navegación */
   function pintarNav(ruta) {
     const d = MIRU.datos;
-    const item = (href, ic, tx, extra, activo) =>
-      '<button class="navit' + (activo ? ' on' : '') + '" data-ir="' + href + '" type="button">' +
-      '<span class="navit__ic" aria-hidden="true">' + ic + '</span><span class="navit__tx">' + U.esc(tx) + '</span>' +
-      (extra != null ? '<span class="navit__pc">' + extra + '</span>' : '') + '</button>';
+    const item = (href, ic, tx, extra, activo, badge) =>
+      '<button class="navit' + (activo ? ' on' : '') + '" data-ir="' + href + '" type="button"' + (activo ? ' aria-current="page"' : '') + '>' +
+      '<span class="navit__ic" aria-hidden="true">' + MIRU.icono(ic) + '</span><span class="navit__tx">' + U.esc(tx) + '</span>' +
+      (badge ? '<span class="navit__badge" aria-label="' + badge + ' nuevas">' + badge + '</span>' : extra != null ? '<span class="navit__pc">' + extra + '</span>' : '') + '</button>';
 
-    let h = '<div class="navgrupo">' + item('#/', '🗓', 'Mi semestre', MIRU.pct.curso() + '%', ruta === '#/' || ruta === '') + '</div>';
+    let h = '<div class="navgrupo">' + item('#/', 'calendario', 'Mi semestre', MIRU.pct.curso() + '%', ruta === '#/' || ruta === '') +
+      item('#/cursos', 'libro', 'Cursos', null, ruta.indexOf('#/cursos') === 0) + '</div>';
     d.bloques.forEach(b => {
       const mods = MIRU.modulosDe(b.id);
       if (!mods.length) return;
@@ -43,20 +44,55 @@
     });
     const nFall = P().falladas().length;
     h += '<div class="navgrupo"><div class="navgrupo__t">Evaluación y repaso</div>' +
-      item('#/simulacros', '⏱', 'Simulacros', P().sesion() ? '●' : null, ruta.indexOf('#/simulacro') === 0 || ruta.indexOf('#/resultado') === 0) +
-      item('#/repaso', '🔁', 'Necesitas repasar', nFall || null, ruta.indexOf('#/repaso') === 0) +
-      item('#/flashcards/dificiles/todas', '🎴', 'Flashcards difíciles', null, ruta.indexOf('#/flashcards/dificiles') === 0) +
+      item('#/simulacros', 'reloj', 'Simulacros', P().sesion() ? '●' : null, ruta.indexOf('#/simulacro') === 0 || ruta.indexOf('#/resultado') === 0) +
+      item('#/repaso', 'repetir', 'Necesitas repasar', nFall || null, ruta.indexOf('#/repaso') === 0) +
+      item('#/flashcards/dificiles/todas', 'tarjetas', 'Flashcards difíciles', null, ruta.indexOf('#/flashcards/dificiles') === 0) +
       '</div><div class="navgrupo"><div class="navgrupo__t">Tú</div>' +
-      item('#/estadisticas', '📊', 'Estadísticas', null, ruta.indexOf('#/estadisticas') === 0) +
-      item('#/perfil', '👤', 'Mi perfil', null, ruta.indexOf('#/perfil') === 0) +
-      (MIRU.admin.activo() ? item('#/admin', '🛠', 'Administración', null, ruta.indexOf('#/admin') === 0) : '') +
+      item('#/estadisticas', 'grafico', 'Estadísticas', null, ruta.indexOf('#/estadisticas') === 0) +
+      item('#/perfil', 'persona', 'Mi perfil', null, ruta.indexOf('#/perfil') === 0) +
+      item('#/sugerir', 'burbuja', 'Sugerir una mejora', null, ruta.indexOf('#/sugerir') === 0) +
+      (MIRU.admin.activo() ? item('#/admin', 'herramienta', 'Administración', null, ruta.indexOf('#/admin') === 0, (MIRU.sugerencias || {}).nuevas || 0) : '') +
       '</div>';
     $nav.innerHTML = h;
+    pintarTabbar(ruta);
+  }
+
+  /* ------------------------------------------- barra inferior (celular) */
+  const TABS = [
+    { id: 'semestre', href: '#/', ic: 'calendario', tx: 'Semestre' },
+    { id: 'cursos', href: '#/cursos', ic: 'libro', tx: 'Cursos' },
+    { id: 'evaluar', href: '#/simulacros', ic: 'reloj', tx: 'Evaluar' },
+    { id: 'perfil', href: '#/perfil', ic: 'persona', tx: 'Perfil' }
+  ];
+  const RAICES = { '': 1, cursos: 1, simulacros: 1, perfil: 1 };
+  function tabDe(ruta) {
+    const v = (ruta || '').replace(/^#\/?/, '').split('/')[0];
+    if (!v) return 'semestre';
+    if (['simulacros', 'simulacro', 'simulacro-en-curso', 'resultado', 'repaso', 'reintentar'].indexOf(v) > -1) return 'evaluar';
+    if (['perfil', 'sugerir', 'admin', 'estadisticas'].indexOf(v) > -1) return 'perfil';
+    return 'cursos';
+  }
+  function pintarTabbar(ruta) {
+    const tb = document.getElementById('tabbar'); if (!tb) return;
+    const act = tabDe(ruta);
+    const nuevas = MIRU.admin.activo() ? ((MIRU.sugerencias || {}).nuevas || 0) : 0;
+    tb.innerHTML = TABS.map(t => '<a class="tab" href="' + t.href + '" data-tab="' + t.id + '"' + (t.id === act ? ' aria-current="page"' : '') + '>' +
+      '<span class="tab__n">' + MIRU.icono(t.ic) + (t.id === 'perfil' && nuevas ? '<span class="navit__badge">' + nuevas + '</span>' : '') + '</span>' +
+      '<span>' + t.tx + '</span></a>').join('');
   }
 
   function pintarMiga(partes) {
     $miga.innerHTML = partes.map((p, i) => (i ? '<span class="miga__sep" aria-hidden="true">›</span>' : '') +
       (p.h ? '<a href="' + p.h + '">' + U.esc(p.t) + '</a>' : '<b>' + U.esc(p.t) + '</b>')).join('');
+    // Atrás (celular): a la pantalla anterior si vino de miru; si no, a la de arriba
+    const at = document.getElementById('atras'); if (!at) return;
+    const previa = pila.length > 1 ? pila[pila.length - 2] : null;
+    const padre = partes.slice(0, -1).reverse().find(p => p.h);
+    const nombre = previa ? (MIRU.sugerencias ? MIRU.sugerencias.nombrePantalla(previa) : 'Atrás') : padre ? padre.t : 'Mi semestre';
+    at.setAttribute('href', previa || (padre ? padre.h : '#/'));
+    at.dataset.atras = previa ? '1' : '';
+    at.innerHTML = MIRU.icono('atras') + '<span>' + U.esc(U.recorta(nombre, 28)) + '</span>';
+    at.setAttribute('aria-label', 'Volver a ' + nombre);
   }
 
   function pintarCabecera() {
@@ -118,19 +154,45 @@
       case 'oral': return vistaOral(p[1], migas);
       case 'estadisticas': migas.push({ t: 'Estadísticas' }); return pintar(V.estadisticas(), migas, ruta);
       case 'perfil': migas.push({ t: 'Mi perfil' }); pintar(V.perfil(), migas, ruta); V.pintarRespaldos($lienzo); return;
+      case 'cursos': migas.push({ t: 'Cursos' }); return pintar(V.cursos(), migas, ruta);
+      case 'sugerir': migas.push({ t: 'Mi perfil', h: '#/perfil' }, { t: 'Sugerir una mejora' }); pintar(V.sugerir(), migas, ruta); MIRU.sugerencias.activar($lienzo); return;
       case 'admin': migas.push({ t: 'Administración' }); pintar(MIRU.admin.render(), migas, ruta); MIRU.admin.activar($lienzo); return;
       default: return pintar(V.noEncontrado(), migas, ruta);
     }
   }
 
+  /* Historial propio para el botón «atrás» y la dirección de la animación */
+  const pila = [];
+  let rutaPintada = null, direccion = 'entra', cambioDeTab = false;
+  const posiciones = {};
+  function anotarRuta(ruta) {
+    if (ruta === pila[pila.length - 1]) return 'misma';
+    if (cambioDeTab) { cambioDeTab = false; pila.length = 0; pila.push(ruta); return 'entra'; }
+    if (pila.length > 1 && pila[pila.length - 2] === ruta) { pila.pop(); return 'entra-atras'; }
+    pila.push(ruta); if (pila.length > 40) pila.shift();
+    return pila.length > 1 ? 'entra-adelante' : 'entra';
+  }
+
   function pintar(html, migas, ruta) {
+    ruta = ruta || location.hash || '#/';
+    const nueva = ruta !== rutaPintada;
+    if (nueva) direccion = anotarRuta(ruta);
     $lienzo.innerHTML = html;
     pintarMiga(migas);
-    pintarNav(ruta || location.hash || '#/');
+    pintarNav(ruta);
     pintarCabecera();
     activarTodo($lienzo);
     $lateral.classList.remove('abierta');
     document.body.classList.remove('menu-abierto');
+    const v = ruta.replace(/^#\/?/, '').split('/')[0];
+    document.body.classList.toggle('raiz', !!RAICES[v] || !P().perfilActivo());
+    document.body.classList.toggle('sin-perfil', !P().perfilActivo());
+    if (nueva) {
+      $lienzo.classList.remove('entra', 'entra-adelante', 'entra-atras');
+      void $lienzo.offsetWidth;   // reinicia la animación
+      if (direccion !== 'misma') $lienzo.classList.add(direccion);
+      rutaPintada = ruta;
+    }
   }
 
   /* ----------------------------------------------------- vistas con estado */
@@ -144,7 +206,7 @@
     if (!r) return pintar(V.noEncontrado(), migas);
     const rt = MIRU.rutaTema(temaId);
     migas.push({ t: r.modulo.nombre, h: '#/modulo/' + r.modulo.id }, { t: r.tema.nombre, h: rt }, { t: 'Pasito' });
-    pintar(cabeceraPractica('👣 Pasito · ' + U.esc(r.tema.nombre), '5 preguntas al azar del tema, con corrección al instante. Se supera con 4 de 5.', r.modulo.color), migas);
+    pintar(cabeceraPractica('Pasito · ' + U.esc(r.tema.nombre), '5 preguntas al azar del tema, con corrección al instante. Se supera con 4 de 5.', r.modulo.color), migas);
     MIRU.pasitos.montar(document.getElementById('zonaPreg'), {
       tipo: 'pasito', temaId, preguntas: MIRU.pasitos.elegir(temaId),
       alSalir: () => { location.hash = rt; }, alTerminar: () => pintarNav(location.hash)
@@ -157,13 +219,13 @@
       const c = MIRU.clase(id); if (!c) return pintar(V.noEncontrado(), migas);
       const m = MIRU.modulo(c.modulo); color = m.color; volver = '#/clase/' + m.id + '/' + c.id;
       preguntas = U.mezclar(MIRU.preguntasDeClase(id).filter(p => !(p.usos || []).includes('caso'))).slice(0, 10);
-      titulo = '📝 Práctica · ' + U.esc(c.nombre);
+      titulo = 'Práctica · ' + U.esc(c.nombre);
       migas.push({ t: m.nombre, h: '#/modulo/' + m.id }, { t: 'Clase ' + (c.numero || ''), h: volver }, { t: 'Práctica' });
     } else {
       const r = MIRU.temaPorId(id); if (!r) return pintar(V.noEncontrado(), migas);
       color = r.modulo.color; volver = MIRU.rutaTema(id);
       preguntas = U.mezclar(MIRU.pasitos.banco(id));
-      titulo = '📝 Todas las preguntas · ' + U.esc(r.tema.nombre);
+      titulo = 'Todas las preguntas · ' + U.esc(r.tema.nombre);
       migas.push({ t: r.modulo.nombre, h: '#/modulo/' + r.modulo.id }, { t: r.tema.nombre, h: volver }, { t: 'Práctica' });
     }
     pintar(cabeceraPractica(titulo, preguntas.length + ' preguntas con corrección al instante. No cuenta como pasito.', color), migas);
@@ -174,7 +236,7 @@
     const fall = P().falladas(moduloId).map(f => MIRU.pregunta(f.id)).filter(Boolean).slice(0, 20);
     migas.push({ t: 'Necesitas repasar', h: '#/repaso' + (moduloId ? '/' + moduloId : '') }, { t: 'Reintentar' });
     if (!fall.length) { location.hash = '#/repaso' + (moduloId ? '/' + moduloId : ''); return; }
-    pintar(cabeceraPractica('🔁 Reintento de errores', fall.length + ' preguntas que fallaste la última vez.'), migas);
+    pintar(cabeceraPractica('Reintento de errores', fall.length + ' preguntas que fallaste la última vez.'), migas);
     MIRU.pasitos.montar(document.getElementById('zonaPreg'), { tipo: 'reintento', preguntas: U.mezclar(fall), alSalir: () => { location.hash = '#/repaso' + (moduloId ? '/' + moduloId : ''); } });
   }
 
@@ -195,9 +257,9 @@
       titulo = 'Las que marcaste como «No lo sé» o «Lo dudo»';
     }
     migas.push({ t: 'Flashcards' });
-    pintar('<h1>🎴 Flashcards</h1><p class="nota">' + U.esc(titulo) + '</p><div id="zonaFC"></div>', migas);
+    pintar('<header class="titulo-grande"><h1>Flashcards</h1><p>' + U.esc(titulo) + '</p></header><div id="zonaFC"></div>', migas);
     const z = document.getElementById('zonaFC');
-    if (!cartas.length) { z.innerHTML = MIRU.ui.vacio('🎴', ambito === 'dificiles' ? 'No tienes flashcards difíciles' : 'Aún no hay flashcards aquí', ''); return; }
+    if (!cartas.length) { z.innerHTML = MIRU.ui.vacio('tarjetas', ambito === 'dificiles' ? 'No tienes flashcards difíciles' : 'Aún no hay flashcards aquí', ''); return; }
     MIRU.flashcards.montar(z, cartas, ctx);
     $lienzo._limpiar = () => { if (z._limpiar) z._limpiar(); };
   }
@@ -207,7 +269,7 @@
     const m = MIRU.modulo(moduloId);
     if (m) migas.push({ t: m.nombre, h: '#/modulo/' + m.id });
     migas.push({ t: 'Simulacro oral' });
-    pintar('<h1>🎤 Simulacro de examen oral</h1><div id="zonaOral"></div>', migas);
+    pintar('<header class="titulo-grande"><h1>Simulacro oral</h1></header><div id="zonaOral"></div>', migas);
     MIRU.oral.montar(document.getElementById('zonaOral'), { temas });
   }
 
@@ -332,7 +394,7 @@
       await MIRU.contenido.cargar();
     } catch (e) {
       console.error(e);
-      $lienzo.innerHTML = MIRU.ui.vacio('📦', 'No se pudo cargar el contenido', U.esc(e.message));
+      $lienzo.innerHTML = MIRU.ui.vacio('caja', 'No se pudo cargar el contenido', U.esc(e.message));
       return;
     }
     await MIRU.almacen.iniciar();
@@ -340,11 +402,19 @@
     if (!hayPerfil && P().perfilActivo()) { hayPerfil = true; MIRU.ui.tema.aplicar(); }
 
     document.querySelector('[data-acc="tema"]').addEventListener('click', () => MIRU.ui.tema.alternar());
-    document.querySelector('[data-acc="menu"]').addEventListener('click', () => {
-      const ab = $lateral.classList.toggle('abierta');
-      document.body.classList.toggle('menu-abierto', ab);
-      document.querySelector('[data-acc="menu"]').setAttribute('aria-expanded', ab);
+    // Barra inferior: cada pestaña empieza su propio historial
+    U.on(document.getElementById('tabbar'), 'click', '[data-tab]', function (e, a) {
+      cambioDeTab = true;
+      if (location.hash === a.getAttribute('href') || (!location.hash && a.getAttribute('href') === '#/')) { e.preventDefault(); global.scrollTo({ top: 0, behavior: 'smooth' }); cambioDeTab = false; }
     });
+    // «Atrás» vuelve de verdad a la pantalla anterior (y a su posición)
+    document.getElementById('atras').addEventListener('click', e => {
+      if (e.currentTarget.dataset.atras === '1' && global.history.length > 1) { e.preventDefault(); global.history.back(); }
+    });
+    // Línea bajo la cabecera solo al desplazarse (como en iOS)
+    const cab = document.getElementById('cabecera');
+    global.addEventListener('scroll', () => cab.classList.toggle('con-sombra', global.scrollY > 4), { passive: true });
+    if ('scrollRestoration' in global.history) global.history.scrollRestoration = 'manual';
     U.on(document.body, 'click', '[data-ir]', function (e, b) {
       if (b.getAttribute('aria-disabled') === 'true') return;
       const destino = b.dataset.ir;
@@ -362,7 +432,13 @@
       if (['pasito', 'practica', 'practica-tema', 'reintentar', 'flashcards', 'oral', 'simulacro-en-curso'].indexOf(v) > -1) return;
       try { enrutar(); } catch (e) {}
     });
-    global.addEventListener('hashchange', () => { enrutar(); global.scrollTo({ top: 0 }); });
+    global.addEventListener('hashchange', () => {
+      if (rutaPintada) posiciones[rutaPintada] = global.scrollY;
+      MIRU.sugerencias.rutaAnterior = rutaPintada || '';
+      enrutar();
+      const y = direccion === 'entra-atras' ? posiciones[location.hash || '#/'] : 0;
+      global.scrollTo({ top: y || 0 });
+    });
 
     enrutar();
     document.getElementById('pie-version').textContent = MIRU.contenido.etiqueta();
@@ -371,6 +447,9 @@
       if (pie && !pie.querySelector('[data-sinc]')) { const s = document.createElement('span'); s.setAttribute('data-sinc', ''); s.className = 'pie-sinc'; pie.appendChild(s); }
       MIRU.almacen.pintarEstado();
     }
+
+    // Administradora: cuántas sugerencias nuevas hay (globito del menú)
+    if (MIRU.admin.activo()) MIRU.sugerencias.refrescarNuevas().then(n => { if (n) pintarNav(location.hash || '#/'); });
 
     if (hayPerfil) {
       P().respaldoDiario();
@@ -383,7 +462,7 @@
     }
   }
 
-  MIRU.app = { enrutar };
+  MIRU.app = { enrutar, pintarNav: () => pintarNav(location.hash || '#/') };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
   else arrancar();
 

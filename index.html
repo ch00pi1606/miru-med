@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>miru · Cirugía I</title>
 <meta name="description" content="miru: planificador de estudio de Cirugía I. Láminas explicadas, pasitos, flashcards y simulacros con revisión.">
-<meta name="theme-color" content="#fdf8f4">
+<meta name="theme-color" content="#F2F2F5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="miru.svg" type="image/svg+xml">
+<link rel="icon" href="miru-192.png" type="image/png">
 <link rel="apple-touch-icon" href="miru-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="miru">
 <link rel="stylesheet" href="miru.css">
 </head>
@@ -20,24 +22,27 @@
 <div class="app">
   <aside class="lateral" id="lateral" aria-label="Navegación">
     <div class="lateral__marca">
-      <a href="#/" class="marca"><span class="marca__logo" aria-hidden="true">miru</span></a>
-      <p class="marca__s">Cirugía I · planificador</p>
+      <a href="#/" class="marca"><img class="marca__icono" src="miru-180.png" alt="" width="36" height="36">
+        <span><span class="marca__logo">miru</span><span class="marca__s">Cirugía I</span></span></a>
     </div>
     <nav class="lateral__nav" id="nav"></nav>
     <div class="lateral__pie"><span id="pie-version"></span></div>
   </aside>
 
   <main class="principal">
-    <header class="cabecera">
-      <button class="btn btn--icono menuBtn" data-acc="menu" type="button" aria-label="Abrir menú" aria-controls="lateral" aria-expanded="false">☰</button>
+    <header class="cabecera" id="cabecera">
+      <button class="btn btn--icono menuBtn" data-acc="menu" type="button" aria-label="Abrir menú" aria-controls="lateral" aria-expanded="false" hidden></button>
+      <a class="atras" id="atras" href="#/"></a>
       <nav class="miga" id="miga" aria-label="Estás en"></nav>
       <div class="cabecera__d">
         <a class="chip-perfil" id="chipPerfil" href="#/perfil" aria-label="Mi perfil"></a>
-        <button class="btn btn--icono" data-acc="tema" type="button" aria-label="Cambiar tema">🌙</button>
+        <button class="btn btn--icono" data-acc="tema" type="button" aria-label="Cambiar tema"></button>
       </div>
     </header>
     <div class="lienzo" id="lienzo" tabindex="-1"><p class="cargando">Abriendo miru…</p></div>
   </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Secciones"></nav>
 </div>
 
 <dialog id="dialogo" aria-labelledby="dialogo-titulo">
@@ -59,6 +64,7 @@
 
 <!-- MOTOR (sin contenido médico) -->
 <script src="nucleo.js"></script>
+<script src="iconos.js"></script>
 <script src="fuentes.js"></script>
 <script src="formato.js"></script>
 <script src="progreso.js"></script>
@@ -74,10 +80,11 @@
 <script src="oral.js"></script>
 <script src="laminas.js"></script>
 <script src="vistas.js"></script>
+<script src="sugerencias.js"></script>
 <script src="admin.js"></script>
 
 <!-- CONTENIDO: índice de archivos (modo abierto) o paquete cifrado (publicación) -->
-<script src="paquete.js?v=2026.10.29-1"></script>
+<script src="paquete.js?v=2026.11.01-1"></script>
 
 <!-- ARRANQUE -->
 <script src="app.js"></script>

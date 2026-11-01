@@ -153,11 +153,11 @@
       const porTipo = {};
       inc.forEach(x => { porTipo[x.tipo] = (porTipo[x.tipo] || 0) + 1; });
 
-      return '<h1>🛠 Administración</h1>' +
+      return '<header class="titulo-grande"><h1>Administración</h1><p>' + U.esc(MIRU.contenido.etiqueta()) + '</p></header>' +
+        (MIRU.sugerencias ? MIRU.sugerencias.htmlAdmin() : '') +
         (SB() ? A.htmlAlumnos()
           : '<div class="capa capa--aviso"><div class="capa__t">Seguridad, dicho claro</div><p>Mientras miru viva solo en el navegador, este modo es una comodidad, no un candado: quien sepa usar las herramientas del navegador puede activarlo. Con Supabase, el rol de administrador se comprobará en el servidor.</p></div>') +
         '<div class="estat">' +
-        '<div class="estat__c"><div class="estat__v">' + U.esc(MIRU.contenido.version || '—') + '</div><div class="estat__e">Versión del contenido · ' + U.fecha(MIRU.contenido.fecha) + '</div></div>' +
         '<div class="estat__c"><div class="estat__v">' + tot.lam + '</div><div class="estat__e">Láminas</div></div>' +
         '<div class="estat__c"><div class="estat__v">' + tot.preg + '</div><div class="estat__e">Preguntas en el banco</div></div>' +
         '<div class="estat__c"><div class="estat__v">' + tot.fc + '</div><div class="estat__e">Flashcards</div></div>' +
@@ -209,6 +209,7 @@
       });
       U.on(raiz, 'click', '[data-acc="exp-prueba"]', () => { if (A._ultimo) U.descargar('miru-errores-prueba.json', JSON.stringify(A._ultimo, null, 1)); });
       if (SB()) A.activarAlumnos(raiz);
+      if (MIRU.sugerencias) MIRU.sugerencias.activarAdmin(raiz);
     },
 
     /* ================================================ ALUMNOS (Supabase) */
@@ -343,9 +344,10 @@
         try {
           const l = await AL().rpcAdmin('admin_bitacora', { p_limite: 60 });
           const nombres = { crear_alumno: 'Creó alumno', editar_alumno: 'Editó alumno', habilitar_curso: 'Habilitó acceso', quitar_curso: 'Quitó acceso',
-            generar_codigo: 'Generó código', liberar_dispositivo: 'Liberó dispositivo', estado_alumno: 'Cambió estado' };
+            generar_codigo: 'Generó código', liberar_dispositivo: 'Liberó dispositivo', estado_alumno: 'Cambió estado', sugerencia: 'Actualizó sugerencia' };
           el.innerHTML = l.length ? '<ul class="respaldos">' + l.map(x => '<li><span>' + U.fechaCorta(x.creado_en) + ' · ' + U.esc(nombres[x.accion] || x.accion) +
             (x.detalle && x.detalle.numero ? ' · MIRU-' + String(x.detalle.numero).padStart(4, '0') : '') +
+            (x.accion === 'sugerencia' && x.detalle && x.detalle.id ? ' · n.º ' + x.detalle.id : '') +
             (x.detalle && x.detalle.hasta ? ' · hasta ' + diaLocal(x.detalle.hasta) : '') + (x.detalle && x.detalle.estado ? ' · ' + U.esc(x.detalle.estado) : '') + '</span></li>').join('') + '</ul>'
             : '<p class="nota">Sin acciones todavía.</p>';
         } catch (err) { el.innerHTML = '<p class="nota">⚠️ ' + U.esc(err.message) + '</p>'; }

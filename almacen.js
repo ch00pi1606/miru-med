@@ -412,6 +412,78 @@
     }
   };
 
+  /* ======================================================= sugerencias
+     El alumno escribe cómo mejorar miru; la administradora las lee en su
+     panel. En modo 'local' se guardan en este navegador (sirve para
+     probar: solo se ven las enviadas desde este mismo dispositivo). */
+  const K_SUG = PRE + 'sugerencias';
+  const ESTADOS_SUG = ['nueva', 'leida', 'en_curso', 'hecha', 'archivada'];
+  const sugLocal = () => leer(K_SUG) || [];
+  const comoErrorMiru = r => { if (!r || r.ok === false) throw new ErrorMiru((r && r.error) || 'No se pudo completar.'); return r; };
+
+  A.sugerencias = {
+    /** ¿Este dispositivo puede enviar? (en Supabase, solo un alumno activado) */
+    puedeEnviar() { return A.modo !== 'supabase' || !!leer(K.cuenta); },
+
+    async enviar(d) {
+      const texto = String(d.texto || '').trim();
+      if (texto.length < 3) throw new ErrorMiru('Escribe tu sugerencia (al menos unas palabras).');
+      if (texto.length > 1000) throw new ErrorMiru('Es muy larga: máximo 1000 caracteres.');
+      if (A.modo !== 'supabase') {
+        const l = sugLocal();
+        const hoy = l.filter(x => Date.now() - new Date(x.creado_en).getTime() < 864e5).length;
+        if (hoy >= 10) throw new ErrorMiru('Ya enviaste 10 sugerencias hoy. ¡Gracias! Podrás enviar más mañana.');
+        const per = P().perfilActivo();
+        const s = { id: Date.now(), categoria: d.categoria || 'idea', texto, pantalla: d.pantalla || null, version: d.version || null,
+          dispositivo: d.dispositivo || null, estado: 'nueva', respuesta: null, creado_en: new Date().toISOString(), actualizado_en: null,
+          alumno: { codigo: 'Este dispositivo', nombre: per ? per.nombre : '' } };
+        l.unshift(s); escribir(K_SUG, l.slice(0, 200));
+        return { ok: true, id: s.id };
+      }
+      if (!leer(K.cuenta)) throw new ErrorMiru('Activa miru con tu número y tu código para enviar sugerencias.');
+      return comoErrorMiru(await rpc('sesion', 'enviar_sugerencia', {
+        p_categoria: d.categoria || 'idea', p_texto: texto, p_pantalla: d.pantalla || null,
+        p_version: d.version || null, p_dispositivo: d.dispositivo || null, p_curso: CURSO
+      }));
+    },
+
+    /** Las del alumno, con su estado y la respuesta de la administradora. */
+    async mias() {
+      if (A.modo !== 'supabase') return sugLocal();
+      if (!leer(K.cuenta)) return [];
+      return (await rpc('sesion', 'mis_sugerencias', {})) || [];
+    },
+
+    /** Panel: estado null = todas menos archivadas; 'todas' = todas. */
+    async admin(estado) {
+      if (A.modo !== 'supabase') {
+        const l = sugLocal();
+        const resumen = {}; l.forEach(x => { resumen[x.estado] = (resumen[x.estado] || 0) + 1; });
+        return { resumen, lista: l.filter(x => estado === 'todas' ? true : estado ? x.estado === estado : x.estado !== 'archivada') };
+      }
+      return rpc('admin', 'admin_sugerencias', { p_estado: estado || null, p_limite: 200 });
+    },
+
+    async cambiar(id, estado, respuesta) {
+      if (ESTADOS_SUG.indexOf(estado) < 0) throw new ErrorMiru('Estado no válido.');
+      if (A.modo !== 'supabase') {
+        const l = sugLocal(); const s = l.find(x => x.id === id);
+        if (!s) throw new ErrorMiru('No existe esa sugerencia.');
+        s.estado = estado; if (respuesta != null) s.respuesta = String(respuesta).trim() || null;
+        s.actualizado_en = new Date().toISOString(); escribir(K_SUG, l);
+        return { ok: true, id, estado, respuesta: s.respuesta };
+      }
+      return comoErrorMiru(await rpc('admin', 'admin_sugerencia_estado', { p_id: id, p_estado: estado, p_respuesta: respuesta == null ? null : String(respuesta) }));
+    },
+
+    /** Cuántas nuevas hay (para el globito del menú). */
+    async nuevas() {
+      if (A.modo !== 'supabase') return sugLocal().filter(x => x.estado === 'nueva').length;
+      if (!A.esAdmin()) return 0;
+      return +(await rpc('admin', 'admin_sugerencias_nuevas', {})) || 0;
+    }
+  };
+
   /* ============================================================ estado */
   A.etiqueta = function () {
     switch (A.estado) {

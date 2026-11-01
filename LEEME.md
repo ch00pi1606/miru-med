@@ -1,6 +1,6 @@
 # miru · carpeta de publicación
 
-Versión del contenido: **2026.10.29-1** (2026-10-29).
+Versión del contenido: **2026.11.01-1** (2026-11-01).
 
 Versión plana: todos los archivos van sueltos, sin carpetas. Sube TODOS los archivos de esta carpeta a la raíz de tu repositorio de GitHub y activa GitHub Pages (Settings → Pages → rama main, carpeta /root).
 

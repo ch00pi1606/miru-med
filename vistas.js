@@ -61,6 +61,45 @@
     return s >= 1 && s <= 8 ? s : 0;
   }
 
+  /* ======================================== listas agrupadas (estilo iOS) */
+  const ICONO_MODULO = { oncologia: 'cinta', anestesiologia: 'aire', traumatologia: 'hueso', pediatria: 'nino' };
+  function icoModulo(m, k) {
+    if (m.bloque === 'generalidades') return '<span class="fila__ico" data-color="' + U.esc(m.color) + '" aria-hidden="true">' + (k + 1) + '</span>';
+    return '<span class="fila__ico" data-color="' + U.esc(m.color) + '" aria-hidden="true">' + MIRU.icono(ICONO_MODULO[m.id] || 'libro') + '</span>';
+  }
+  /** Una fila: { href, ico (html), t (html), s, v (html), dest } */
+  function fila(o) {
+    return '<li><a class="fila' + (o.dest ? ' fila--dest' : '') + '" href="' + U.esc(o.href) + '">' + (o.ico || '') +
+      '<span class="fila__tx"><span class="fila__t">' + o.t + '</span>' + (o.s ? '<span class="fila__s">' + o.s + '</span>' : '') + '</span>' +
+      (o.v != null && o.v !== '' ? '<span class="fila__v">' + o.v + '</span>' : '') + MIRU.icono('chevron', 'fila__chev') + '</a></li>';
+  }
+  const icoFijo = (nombre, color) => '<span class="fila__ico"' + (color ? ' data-color="' + color + '"' : '') + ' aria-hidden="true">' + MIRU.icono(nombre) + '</span>';
+  function grupo(titulo, filas, extra) {
+    extra = extra || {};
+    return '<section class="grupo"' + (titulo ? ' aria-label="' + U.esc(titulo) + '"' : '') + '>' +
+      (titulo ? '<div class="grupo__cab"><h2 class="grupo__t">' + U.esc(titulo) + '</h2>' + (extra.enlace || '') + '</div>' : '') +
+      '<ul class="lista' + (extra.sinIco ? ' lista--sin-ico' : '') + '">' + filas.join('') + '</ul>' +
+      (extra.pie ? '<p class="grupo__pie">' + extra.pie + '</p>' : '') + '</section>';
+  }
+  V.fila = fila; V.grupo = grupo; V.icoFijo = icoFijo;
+
+  function filaModulo(m, k, sem) {
+    const clases = MIRU.clasesDe(m.id);
+    const con = clases.filter(MIRU.claseConContenido);
+    const hechas = clases.filter(c => MIRU.claseConContenido(c) && MIRU.pct.clase(c).pct >= 80).length;
+    const actual = m.bloque === 'generalidades' && sem === k + 1;
+    const sub = !con.length ? 'En preparación'
+      : hechas + ' de ' + clases.length + ' clases' + (con.length < clases.length ? ' · ' + (clases.length - con.length) + ' en preparación' : '');
+    return fila({ href: ruta.modulo(m.id), ico: icoModulo(m, k), t: U.esc(m.nombre) + (actual ? ' <span class="pildora">Esta semana</span>' : ''),
+      s: sub, v: con.length ? MIRU.pct.modulo(m.id).pct + ' %' : '' });
+  }
+
+  function textoGuardado() {
+    const AL = MIRU.almacen;
+    if (AL.modo === 'supabase' && AL.cuenta()) return 'Tu avance se guarda aquí y se sincroniza con tu cuenta miru.';
+    return 'Tu avance se guarda en este dispositivo. Respaldos y perfiles en <a href="#/perfil">Mi perfil</a>.';
+  }
+
   /* ================================================================ INICIO */
   V.inicio = function () {
     const per = P().perfilActivo();
@@ -71,9 +110,15 @@
     const uv = P().todo().ultimaVisita;
     let seguir = '';
     if (uv && uv.ruta && /^#\/tema\//.test(uv.ruta)) {
-      const tid = uv.ruta.split('/')[4];
-      const r = MIRU.temaPorId(tid);
-      if (r) seguir = '<button class="boton boton-grande" data-ir="' + uv.ruta + '" type="button">Seguir con «' + U.esc(U.recorta(r.tema.nombre, 48)) + '»</button>';
+      const r = MIRU.temaPorId(uv.ruta.split('/')[4]);
+      if (r) {
+        const pt = MIRU.pct.tema(r.clase, r.tema);
+        const lam = pt.laminas && pt.laminas[1] ? ' · ' + pt.laminas[0] + ' de ' + pt.laminas[1] + ' láminas' : '';
+        seguir = '<a class="seguir" href="' + U.esc(uv.ruta) + '" data-color="' + U.esc(r.modulo.color) + '">' +
+          '<span class="seguir__tx"><span class="seguir__k">Continuar</span><span class="seguir__t">' + U.esc(r.tema.nombre) + '</span>' +
+          '<span class="seguir__s">' + U.esc(r.modulo.nombre) + (r.clase.numero ? ' · clase ' + r.clase.numero : '') + lam + '</span>' + U.barra(pt.pct, true) + '</span>' +
+          '<span class="seguir__play" aria-hidden="true">' + MIRU.icono('play') + '</span></a>';
+      }
     }
     const nov = MIRU.contenido.nuevas.length
       ? '<div class="nota-cinta" role="status"><strong>Novedades en miru:</strong><ul>' + MIRU.contenido.nuevas.map(x => '<li>' + U.md(x) + '</li>').join('') + '</ul>' +
@@ -84,36 +129,58 @@
     const esp = MIRU.modulosDe('especialidades');
     const fall = P().falladas().length;
     const dificiles = Object.values(P().todo().flashcards).filter(f => f.estado === 'nose' || f.estado === 'dudo').length;
+    const E = MIRU.evaluacion;
+    const ultima = clave => { const h = P().simulacros(clave); return h.length ? U.num(h[h.length - 1].nota) : ''; };
+    const histEsp = P().simulacros('especialidades');
 
-    return '<header class="portada">' +
-      '<div class="nota-adhesiva nota-rosa" aria-hidden="true">Un pasito cada día también es avanzar ♡</div>' +
-      '<div class="portada-titulo"><h1>Mi semestre</h1>' +
-      '<p class="subtitulo">' + U.esc(MIRU.datos.curso.nombre) + (per && per.nombre ? ' · ' + U.esc(per.nombre) : '') + '</p></div>' +
-      '<div class="nota-adhesiva nota-lila"><strong>' + pct + '%</strong> del curso<br>' + pasitos + ' pasito' + (pasitos === 1 ? '' : 's') + ' superado' + (pasitos === 1 ? '' : 's') + '<br>' + sims + ' simulacro' + (sims === 1 ? '' : 's') + '</div>' +
-      '</header>' + nov +
-      (seguir ? '<section class="arranque">' + seguir + '</section>' : '') +
+    const evaluar = [fila({ href: '#/simulacro/especialidades', ico: icoFijo('reloj'), t: 'Simulacro de Especialidades', s: '40 preguntas · 40 min', v: ultima('especialidades') })];
+    if (E.disponible('generalidades')) evaluar.push(fila({ href: '#/simulacro/generalidades', ico: icoFijo('reloj', 'lila'), t: 'Simulacro de Generalidades', s: '40 preguntas · 40 min', v: ultima('generalidades') }));
+    evaluar.push(fila({ href: '#/simulacros', ico: icoFijo('cuadricula', 'pizarra'), t: 'Todos los simulacros', s: 'Repasos de 10 preguntas por rotación o semana' }));
 
-      (gen.length ? '<section aria-labelledby="t-gen"><h2 id="t-gen" class="cinta">Generalidades</h2>' +
-        '<p class="ayuda">' + (sem ? 'Vas en la <strong>semana ' + sem + '</strong>.' : 'Para que miru marque tu semana, pon la fecha de inicio de Generalidades en <a href="#/perfil">Mi perfil</a>.') +
-        ' Cada casilla es una clase: se llena al leer sus láminas, responder sus preguntas y superar su pasito.</p>' +
-        '<div class="planificador planificador--semanas">' + gen.map((m, k) => columnaModulo(m, { actual: sem === k + 1 })).join('') + '</div></section>' : '') +
+    return '<header class="titulo-grande"><h1>Mi semestre</h1>' +
+      '<p>' + U.esc(MIRU.datos.curso.nombre) + (sem ? ' · semana ' + sem : '') + (per && per.nombre ? ' · ' + U.esc(per.nombre) : '') + '</p></header>' +
+      nov + seguir +
+      '<div class="cifras" role="list">' +
+      '<div role="listitem"><b>' + pct + ' %</b><span>del curso</span></div>' +
+      '<div role="listitem"><b>' + pasitos + '</b><span>pasito' + (pasitos === 1 ? '' : 's') + '</span></div>' +
+      '<div role="listitem"><b>' + sims + '</b><span>simulacro' + (sims === 1 ? '' : 's') + '</span></div></div>' +
 
-      (esp.length ? '<section aria-labelledby="t-esp"><h2 id="t-esp" class="cinta">Especialidades</h2>' +
-        '<div class="planificador planificador--4">' + esp.map(m => columnaModulo(m)).join('') + '</div></section>' : '') +
+      (gen.length ? grupo('Generalidades', gen.map((m, k) => filaModulo(m, k, sem)), {
+        enlace: '<a class="grupo__enlace" href="#/bloque/generalidades">Ver por clase</a>',
+        pie: sem ? '' : 'Pon la fecha de inicio de Generalidades en <a href="#/perfil">Mi perfil</a> para que miru marque tu semana.' }) : '') +
+      (esp.length ? grupo('Especialidades', esp.map((m, k) => filaModulo(m, k, sem))) : '') +
+      grupo('Evaluarse', evaluar) +
+      (histEsp.length ? '<div class="tarjeta tarjeta--grafico"><h2>Tus simulacros de Especialidades</h2>' + E.grafico(histEsp) + '</div>' : '') +
+      grupo('Para hoy', [
+        fila({ href: '#/repaso', ico: icoFijo('repetir', 'rosa'), t: 'Necesitas repasar', s: fall ? 'Preguntas cuyo último intento fue incorrecto' : 'No tienes preguntas falladas pendientes', v: fall ? '<span class="insignia">' + fall + '</span>' : '' }),
+        fila({ href: '#/flashcards/dificiles/todas', ico: icoFijo('tarjetas', 'amarillo'), t: 'Flashcards difíciles', s: dificiles ? 'Las que marcaste «No lo sé» o «Lo dudo»' : 'Sin flashcards difíciles por ahora', v: dificiles || '' })
+      ]) +
+      grupo('', [fila({ href: '#/sugerir', ico: icoFijo('burbuja', 'verde'), t: 'Sugerir una mejora', s: '¿Qué cambiarías de miru? Cuéntaselo a la administradora' })], { pie: textoGuardado() });
+  };
 
-      '<section class="fila-inferior">' +
-      '<article class="tarjeta"><h2>Simulacros</h2>' +
-      '<p>Como el examen: reloj único, corrección al final y refuerzo de lo que más fallas.</p>' +
-      '<div class="tira">' +
-      '<button class="boton" data-ir="#/simulacro/especialidades" type="button">Especialidades · 40 preguntas · 40 min</button>' +
-      (MIRU.evaluacion.disponible('generalidades') ? '<button class="boton boton-suave" data-ir="#/simulacro/generalidades" type="button">Generalidades · 40 · 40 min</button>' : '') +
-      '<button class="boton boton-suave" data-ir="#/simulacros" type="button">Todos los simulacros</button>' +
-      '</div>' + MIRU.evaluacion.grafico(P().simulacros('especialidades')) + '</article>' +
-      '<aside class="tarjeta recuerda"><h2>Para hoy</h2><ul>' +
-      '<li>' + (fall ? '<a href="#/repaso">' + fall + ' pregunta' + (fall === 1 ? '' : 's') + ' por repasar</a>' : 'No tienes preguntas falladas pendientes.') + '</li>' +
-      '<li>' + (dificiles ? '<a href="#/flashcards/dificiles/todas">' + dificiles + ' flashcard' + (dificiles === 1 ? '' : 's') + ' difíciles</a>' : 'Sin flashcards difíciles por ahora.') + '</li>' +
-      '<li>Tu avance se guarda solo en este dispositivo. <a href="#/perfil">Respaldos y perfiles</a>.</li>' +
-      '</ul></aside></section>';
+  /* ================================================================ CURSOS */
+  V.cursos = function () {
+    const sem = semanaActual();
+    const fall = P().falladas().length;
+    const admin = MIRU.admin && MIRU.admin.activo();
+    const nuevas = (MIRU.sugerencias && MIRU.sugerencias.nuevas) || 0;
+    return '<header class="titulo-grande"><h1>Cursos</h1><p>' + U.esc(MIRU.datos.curso.nombre) +
+      (MIRU.datos.curso.subtitulo ? ' · ' + U.esc(MIRU.datos.curso.subtitulo) : '') + '</p></header>' +
+      MIRU.datos.bloques.map(b => {
+        const mods = MIRU.modulosDe(b.id);
+        if (!mods.length) return '';
+        return grupo(b.nombre, mods.map((m, k) => filaModulo(m, k, sem)),
+          { enlace: b.id === 'generalidades' ? '<a class="grupo__enlace" href="#/bloque/' + b.id + '">Ver por clase</a>' : '' });
+      }).join('') +
+      grupo('Evaluación y repaso', [
+        fila({ href: '#/simulacros', ico: icoFijo('reloj'), t: 'Simulacros', s: 'Especialidades, Generalidades y repasos cortos' }),
+        fila({ href: '#/repaso', ico: icoFijo('repetir', 'rosa'), t: 'Necesitas repasar', v: fall ? '<span class="insignia">' + fall + '</span>' : '' }),
+        fila({ href: '#/flashcards/dificiles/todas', ico: icoFijo('tarjetas', 'amarillo'), t: 'Flashcards difíciles' })
+      ]) +
+      grupo('Tú', [
+        fila({ href: '#/estadisticas', ico: icoFijo('grafico', 'azul'), t: 'Estadísticas' }),
+        fila({ href: '#/sugerir', ico: icoFijo('burbuja', 'verde'), t: 'Sugerir una mejora' })
+      ].concat(admin ? [fila({ href: '#/admin', ico: icoFijo('herramienta', 'durazno'), t: 'Administración', v: nuevas ? '<span class="insignia">' + nuevas + '</span>' : '' })] : []));
   };
 
   /* ================================================================ BLOQUE */
@@ -346,7 +413,7 @@
     };
     const esp = MIRU.modulosDe('especialidades'), gen = MIRU.modulosDe('generalidades');
     const ses = P().sesion();
-    return '<h1>⏱ Simulacros</h1>' +
+    return '<header class="titulo-grande"><h1>Simulacros</h1><p>Como el examen: reloj único, corrección al final y refuerzo de lo que más fallas.</p></header>' +
       (ses ? '<div class="nota-cinta">Tienes un simulacro en curso: <strong>' + U.esc(E.tituloClave(ses.clave)) + '</strong>. <a href="#/simulacro-en-curso">Continuar</a></div>' : '') +
       '<div class="rejilla">' +
       tarjeta('especialidades', 'Simulacro de Especialidades', '40 preguntas · 40 minutos · 10 por especialidad.', '#/simulacro/especialidades') +
@@ -360,8 +427,8 @@
   V.repaso = function (moduloId) {
     const fall = P().falladas(moduloId);
     const m = moduloId ? MIRU.modulo(moduloId) : null;
-    const cab = '<h1>🔁 Necesitas repasar</h1>' + (m ? '<p class="nota">' + U.esc(m.nombre) + ' · <a href="#/repaso">ver todo</a></p>' : '');
-    if (!fall.length) return cab + MIRU.ui.vacio('🎉', 'Nada pendiente', 'Cuando falles una pregunta aparecerá aquí con su explicación, hasta que la aciertes.');
+    const cab = '<header class="titulo-grande"><h1>Necesitas repasar</h1>' + (m ? '<p>' + U.esc(m.nombre) + ' · <a href="#/repaso">ver todo</a></p>' : '') + '</header>';
+    if (!fall.length) return cab + MIRU.ui.vacio('check', 'Nada pendiente', 'Cuando falles una pregunta aparecerá aquí con su explicación, hasta que la aciertes.');
     return cab + '<div class="nota-cinta"><strong>' + fall.length + '</strong> preguntas cuyo último intento fue incorrecto. Salen de esta lista en cuanto las aciertes.</div>' +
       '<div class="tira"><button class="btn btn--pri" data-ir="#/reintentar' + (moduloId ? '/' + moduloId : '') + '" type="button">🔁 Reintentar ' + Math.min(fall.length, 20) + ' de ellas</button></div>' +
       fall.slice(0, 60).map(f => {
@@ -390,7 +457,7 @@
       const it = r.reduce((a, x) => a + x.intentos, 0), ac = r.reduce((a, x) => a + x.aciertos, 0);
       return '<tr><td>' + U.esc(m.nombre) + '</td><td>' + p.pct + ' %</td><td>' + (it ? Math.round(ac / it * 100) + ' %' : '—') + '</td><td>' + P().falladas(m.id).length + '</td></tr>';
     }).join('');
-    return '<h1>📊 Estadísticas</h1>' +
+    return '<header class="titulo-grande"><h1>Estadísticas</h1></header>' +
       '<div class="estat">' +
       tarjetaEst(MIRU.pct.curso() + ' %', 'Progreso del curso') +
       tarjetaEst(intentos ? Math.round(aciertos / intentos * 100) + ' %' : '—', 'Acierto global (' + aciertos + '/' + intentos + ')') +
@@ -418,7 +485,12 @@
     const ligado = cuenta ? lista.find(x => x.id === cuenta.perfilId) : null;
     const est = AL.etiqueta();
     const curso = cuenta ? (cuenta.cursos || []).find(x => x.curso === (MIRU_CFG().curso || 'cir1')) : null;
-    return '<h1>👤 Mi perfil</h1>' +
+    const nuevas = (MIRU.sugerencias && MIRU.sugerencias.nuevas) || 0;
+    return '<header class="titulo-grande"><h1>Mi perfil</h1><p>' + U.esc(act ? act.nombre : '') + (cuenta ? ' · ' + U.esc(cuenta.codigo) : '') + '</p></header>' +
+      grupo('', [
+        fila({ href: '#/estadisticas', ico: icoFijo('grafico', 'azul'), t: 'Estadísticas' }),
+        fila({ href: '#/sugerir', ico: icoFijo('burbuja', 'verde'), t: 'Sugerir una mejora', s: 'Cuéntale a la administradora qué mejorarías' })
+      ].concat(admin ? [fila({ href: '#/admin', ico: icoFijo('herramienta', 'durazno'), t: 'Administración', v: nuevas ? '<span class="insignia">' + nuevas + '</span>' : '' })] : [])) +
       (cuenta ? '<div class="tj"><h3>Tu cuenta miru</h3>' +
         '<p><strong>' + U.esc(cuenta.codigo) + '</strong> · ' + U.esc(cuenta.nombre) + '</p>' +
         '<p class="nota" data-sinc>' + est.i + ' ' + U.esc(est.t) + '</p>' +
@@ -439,7 +511,7 @@
 
       '<div class="tj"><h3>Apariencia y semestre</h3>' +
       '<div class="campo"><span class="campo__l">Tema</span><div class="segmentado" role="radiogroup" aria-label="Tema">' +
-      [['claro', '☀️ Claro'], ['oscuro', '🌙 Oscuro'], ['auto', '🖥 Como el dispositivo']].map(([v, t]) =>
+      [['claro', MIRU.icono('sol') + ' Claro'], ['oscuro', MIRU.icono('luna') + ' Oscuro'], ['auto', MIRU.icono('monitor') + ' Automático']].map(([v, t]) =>
         '<button type="button" role="radio" aria-checked="' + (pref === v) + '" data-acc="tema-pref" data-v="' + v + '">' + t + '</button>').join('') + '</div></div>' +
       '<label class="campo"><span class="campo__l">Inicio de Generalidades</span><input type="date" data-campo="inicioGeneralidades" value="' + U.esc(P().perfil('inicioGeneralidades') || '') + '">' +
       '<span class="nota">Con esta fecha, «Mi semestre» marca la semana en la que vas.</span></label></div>' +
@@ -471,8 +543,8 @@
 
   /* ================================================================ OTRAS */
   V.bienvenida = function () {
-    return '<div class="bienvenida"><div class="nota-adhesiva nota-lila bienvenida__nota">' +
-      '<h1>¡Hola! Soy miru</h1><p>Tu planificador de Cirugía I: láminas, pasitos, flashcards y simulacros.</p>' +
+    return '<div class="bienvenida"><div class="bienvenida__nota"><span class="bienvenida__icono acceso__logo" aria-hidden="true"></span>' +
+      '<h1>Hola, soy miru</h1><p>Tu planificador de Cirugía I: láminas, pasitos, flashcards y simulacros.</p>' +
       '<form data-form="perfil"><label class="campo"><span class="campo__l">¿Cómo te llamas?</span>' +
       '<input name="nombre" autocomplete="given-name" maxlength="40" required placeholder="Tu nombre"></label>' +
       '<button class="boton" type="submit">Empezar</button></form>' +
@@ -480,7 +552,7 @@
   };
 
   V.noEncontrado = function () {
-    return MIRU.ui.vacio('🧭', 'No encontré esa página', '<a href="#/">Volver a Mi semestre</a>');
+    return MIRU.ui.vacio('brujula', 'No encontré esa página', '<a href="#/">Volver a Mi semestre</a>');
   };
 
 })(window);

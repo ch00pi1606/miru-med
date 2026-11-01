@@ -2,26 +2,22 @@
    miru · service worker — funciona sin internet una vez abierta
    · Código y contenido: primero la red (para recibir actualizaciones) y, si
      no hay conexión, la copia guardada.
-   · Fuentes e iconos: primero la copia guardada.
+   · Íconos e imágenes: primero la copia guardada.
    La herramienta de construcción reemplaza VERSION en cada publicación.
    ========================================================================= */
-const VERSION = 'miru-2026.10.29-1';
+const VERSION = 'miru-2026.11.01-1';
 const BASICOS = [
   './', './index.html', './manifest.webmanifest',
-  './miru.css',
-  './config.js',
-  './nucleo.js', './fuentes.js', './formato.js',
-  './progreso.js', './almacen.js', './contenido.js',
-  './ui.js', './preguntas.js', './pasitos.js',
-  './evaluacion.js', './flashcards.js', './esquemas.js',
-  './casos.js', './oral.js', './laminas.js',
-  './vistas.js', './admin.js', './app.js',
-  './paquete.js',
-  './patrick-hand-latin-400-normal.woff2',
-  './atkinson-hyperlegible-latin-400-normal.woff2',
-  './atkinson-hyperlegible-latin-400-italic.woff2',
-  './atkinson-hyperlegible-latin-700-normal.woff2',
-  './miru.svg', './miru-192.png'
+  'miru.css',
+  'config.js',
+  'nucleo.js', 'iconos.js', 'fuentes.js', 'formato.js',
+  'progreso.js', 'almacen.js', 'contenido.js',
+  'ui.js', 'preguntas.js', 'pasitos.js',
+  'evaluacion.js', 'flashcards.js', 'esquemas.js',
+  'casos.js', 'oral.js', 'laminas.js',
+  'vistas.js', 'sugerencias.js', 'admin.js', 'app.js',
+  'paquete.js',
+  'miru-180.png', 'miru-192.png', 'miru-512.png'
 ];
 
 self.addEventListener('install', e => {

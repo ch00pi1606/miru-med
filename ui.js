@@ -52,7 +52,7 @@
       if (!cont) { cont = document.createElement('div'); cont.id = 'avisos'; cont.setAttribute('role', 'status'); document.body.appendChild(cont); }
       const a = document.createElement('div');
       a.className = 'aviso-flot aviso-flot--' + (tipo || 'info');
-      a.innerHTML = '<div>' + html + '</div><button type="button" class="aviso-flot__x" aria-label="Cerrar">×</button>';
+      a.innerHTML = '<div>' + html + '</div><button type="button" class="aviso-flot__x" aria-label="Cerrar">' + MIRU.icono('cerrar') + '</button>';
       cont.appendChild(a);
       const quitar = () => { a.classList.add('saliendo'); setTimeout(() => a.remove(), 260); };
       a.querySelector('button').addEventListener('click', quitar);
@@ -68,9 +68,8 @@
         const oscuro = p === 'oscuro' || (p === 'auto' && global.matchMedia && global.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.setAttribute('data-theme', oscuro ? 'dark' : 'light');
         const b = document.querySelector('[data-acc="tema"]');
-        if (b) { b.textContent = oscuro ? '☀️' : '🌙'; b.setAttribute('aria-label', oscuro ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'); }
-        const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', oscuro ? '#1d1822' : '#fdf8f4');
+        if (b) { b.innerHTML = MIRU.icono(oscuro ? 'sol' : 'luna'); b.setAttribute('aria-label', oscuro ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'); }
+        document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', oscuro ? '#0E0E10' : '#F2F2F5'));
       },
       alternar() {
         const actual = document.documentElement.getAttribute('data-theme') === 'dark' ? 'oscuro' : 'claro';
@@ -86,8 +85,10 @@
       }
     },
 
+    /** Estado vacío. icono: nombre de MIRU.iconos (o un emoji, que se cambia solo). */
     vacio(icono, titulo, texto) {
-      return '<div class="vacio"><div class="vacio__ic" aria-hidden="true">' + icono + '</div>' +
+      const ic = MIRU.iconos && MIRU.iconos[icono] ? MIRU.icono(icono) : icono;
+      return '<div class="vacio"><div class="vacio__ic" aria-hidden="true">' + ic + '</div>' +
         (titulo ? '<h3>' + U.esc(titulo) + '</h3>' : '') + (texto ? '<p>' + texto + '</p>' : '') + '</div>';
     }
   };

@@ -300,6 +300,7 @@
 
     fecha(ts) {
       if (!ts) return '—';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ts)) ts += 'T12:00:00';   // fecha sola: mediodía local, no medianoche UTC
       try { return new Date(ts).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }); }
       catch (e) { return new Date(ts).toLocaleDateString(); }
     },

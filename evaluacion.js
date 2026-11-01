@@ -212,7 +212,6 @@
 
     cont.innerHTML =
       '<header class="portada">' +
-        '<div class="nota-adhesiva nota-rosa" aria-hidden="true">Cada pregunta que revisas hoy es una que ya no te sorprende en el examen ♡</div>' +
         '<div class="portada-titulo"><h1>' + U.esc(titulo) + '</h1>' +
         '<p class="subtitulo">' + U.esc(tipo === 'rotacion' ? cfg.subtitulo : cfg.subtitulo) + '</p></div>' +
         '<div class="nota-adhesiva nota-lila"><strong>' + nTotal + ' preguntas</strong><br>' + cfg.minutos + ' minutos<br>' +
