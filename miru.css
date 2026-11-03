@@ -472,6 +472,8 @@ body.modo-examen .lateral, body.modo-examen .tabbar, body.sin-perfil .tabbar, bo
 .capa--did { background: var(--durazno-fondo); } .capa--did .capa__t { color: var(--durazno-texto); }
 .capa--ancla { background: var(--crema-fondo); } .capa--ancla .capa__t { color: var(--crema-texto); }
 .capa--aviso { background: var(--aviso-fondo); } .capa--aviso .capa__t { color: var(--aviso); }
+.capa--docente { background: var(--azul-fondo); box-shadow: inset 3px 0 0 var(--azul-fuerte); } .capa--docente .capa__t { color: var(--azul-texto); }
+.capa--curioso { background: var(--crema-fondo); box-shadow: inset 3px 0 0 var(--crema-texto); } .capa--curioso .capa__t { color: var(--crema-texto); }
 
 .dual { border: 0; border-radius: var(--radio); overflow: hidden; margin: 14px 0; background: var(--hoja); box-shadow: var(--sombra); }
 .dual__cab { display: flex; align-items: center; gap: 7px; padding: 12px 16px; background: none; border-bottom: 1px solid var(--linea); font-weight: 600; font-size: .9375rem; }

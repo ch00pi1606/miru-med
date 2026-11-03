@@ -358,7 +358,9 @@
 
   const CAPAS = {
     curso: ['curso', '📘 Material del curso'], complementaria: ['evid', '🔎 Investigación complementaria'],
-    evidencia: ['evid', '🔬 Evidencia científica actual'], didactica: ['did', '🧠 Explicación didáctica'], aviso: ['aviso', '⚠️ Atención']
+    evidencia: ['evid', '🔬 Evidencia científica actual'], didactica: ['did', '🧠 Explicación didáctica'], aviso: ['aviso', '⚠️ Atención'],
+    docente: ['docente', '👩‍⚕️ El docente lo remarca · tómalo en cuenta'], curioso: ['curioso', '✨ Dato curioso'],
+    error: ['aviso', '⚠️ Lo que se suele hacer mal'], porque: ['did', '🧠 El porqué']
   };
   function capaWrap(s) {
     const cuerpo = U.parrafos(s.texto || '');
@@ -370,8 +372,8 @@
   /** Docente y evidencia: dos capas que conviven, nunca una confrontación. */
   function bloqueDual(s) {
     return '<div class="dual"><div class="dual__cab">⚖️ ' + U.esc(s.titulo2 || 'Enfoque del curso y evidencia actual') + '</div>' +
-      '<div class="dual__p dual__p--curso"><span class="dual__et">📘 Enfoque enseñado en el curso' + (s.origen ? ' · ' + U.esc(s.origen) : '') + '</span>' + U.parrafos(s.curso) + '</div>' +
-      '<div class="dual__p dual__p--evid"><span class="dual__et">🔬 Evidencia actual</span>' + U.parrafos(s.evidencia || s.actual) + '</div>' +
+      '<div class="dual__p dual__p--curso"><span class="dual__et">' + U.esc(s.etCurso || '📘 Enfoque enseñado en el curso') + (s.origen ? ' · ' + U.esc(s.origen) : '') + '</span>' + U.parrafos(s.curso) + '</div>' +
+      '<div class="dual__p dual__p--evid"><span class="dual__et">' + U.esc(s.etOtra || '🔬 Evidencia actual') + '</span>' + U.parrafos(s.evidencia || s.actual) + '</div>' +
       (s.porQue ? '<div class="dual__p"><span class="dual__et">💡 ¿Por qué existe esta diferencia?</span>' + U.parrafos(s.porQue) + '</div>' : '') +
       (s.responder ? '<div class="dual__p dual__p--resp"><span class="dual__et">🎓 ¿Qué respondo?</span>' + U.parrafos(s.responder) + '</div>' : '') +
       '</div>';
