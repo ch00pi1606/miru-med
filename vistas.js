@@ -351,6 +351,7 @@
         : '<strong>' + U.md(x.t) + '</strong>' + (x.d ? ' — ' + U.md(x.d) : '')) + '</li>').join('') + '</ul>' + marcar(t.id, anc);
       case 'acordeon': return cab + s.items.map(x => acordeon(x.titulo, U.parrafos(x.texto), x.abierto)).join('') + marcar(t.id, anc);
       case 'caso': return cab + MIRU.casos.render(s.caso);
+      case 'figura': return cab + (s.intro ? U.parrafos(s.intro) : '') + MIRU.laminas.figura(s.figura) + marcar(t.id, anc);
       default: return cab + capaWrap(s);
     }
   }

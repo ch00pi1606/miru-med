@@ -52,6 +52,7 @@
         if (s.tipo === 'esquema') { P(s.esquema.intro); P(s.esquema.cierre); }
         if (s.tipo === 'pregunta') P(s.pregunta.enunciado);
         if (s.tipo === 'caso') { P(s.caso.presentacion); P(s.caso.origen); }
+        if (s.tipo === 'figura') { P(s.figura.leyenda); P(s.figura.credito); }
       });
       (t.casos || []).forEach(c => { P(c.presentacion); P(c.origen); P(c.cierre); P(c.aprendizajes); });
       P(t.resumen);

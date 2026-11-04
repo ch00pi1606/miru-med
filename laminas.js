@@ -92,5 +92,6 @@
         (f.credito ? ' <span class="fig__cred">' + U.md(f.credito) + '</span>' : '') + '</figcaption>' : '') +
       '</figure>';
   }
+  L.figura = figura;
 
 })(window);
