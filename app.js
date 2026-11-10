@@ -16,7 +16,7 @@
     const item = (href, ic, tx, extra, activo, badge) =>
       '<button class="navit' + (activo ? ' on' : '') + '" data-ir="' + href + '" type="button"' + (activo ? ' aria-current="page"' : '') + '>' +
       '<span class="navit__ic" aria-hidden="true">' + MIRU.icono(ic) + '</span><span class="navit__tx">' + U.esc(tx) + '</span>' +
-      (badge ? '<span class="navit__badge" aria-label="' + badge + ' nuevas">' + badge + '</span>' : extra != null ? '<span class="navit__pc">' + extra + '</span>' : '') + '</button>';
+      (badge ? '<span class="navit__badge" aria-label="' + badge + ' pendientes">' + badge + '</span>' : extra != null ? '<span class="navit__pc">' + extra + '</span>' : '') + '</button>';
 
     let h = '<div class="navgrupo">' + item('#/', 'calendario', 'Mi semestre', MIRU.pct.curso() + '%', ruta === '#/' || ruta === '') +
       item('#/cursos', 'libro', 'Cursos', null, ruta.indexOf('#/cursos') === 0) + '</div>';
@@ -51,7 +51,7 @@
       item('#/estadisticas', 'grafico', 'Estadísticas', null, ruta.indexOf('#/estadisticas') === 0) +
       item('#/perfil', 'persona', 'Mi perfil', null, ruta.indexOf('#/perfil') === 0) +
       item('#/sugerir', 'burbuja', 'Sugerir una mejora', null, ruta.indexOf('#/sugerir') === 0) +
-      (MIRU.admin.activo() ? item('#/admin', 'herramienta', 'Administración', null, ruta.indexOf('#/admin') === 0, (MIRU.sugerencias || {}).nuevas || 0) : '') +
+      (MIRU.admin.activo() ? item('#/admin', 'herramienta', 'Administración', null, ruta.indexOf('#/admin') === 0, MIRU.admin.pendientes()) : '') +
       '</div>';
     $nav.innerHTML = h;
     pintarTabbar(ruta);
@@ -75,7 +75,7 @@
   function pintarTabbar(ruta) {
     const tb = document.getElementById('tabbar'); if (!tb) return;
     const act = tabDe(ruta);
-    const nuevas = MIRU.admin.activo() ? ((MIRU.sugerencias || {}).nuevas || 0) : 0;
+    const nuevas = MIRU.admin.activo() ? MIRU.admin.pendientes() : 0;
     tb.innerHTML = TABS.map(t => '<a class="tab" href="' + t.href + '" data-tab="' + t.id + '"' + (t.id === act ? ' aria-current="page"' : '') + '>' +
       '<span class="tab__n">' + MIRU.icono(t.ic) + (t.id === 'perfil' && nuevas ? '<span class="navit__badge">' + nuevas + '</span>' : '') + '</span>' +
       '<span>' + t.tx + '</span></a>').join('');
@@ -93,6 +93,23 @@
     at.dataset.atras = previa ? '1' : '';
     at.innerHTML = MIRU.icono('atras') + '<span>' + U.esc(U.recorta(nombre, 28)) + '</span>';
     at.setAttribute('aria-label', 'Volver a ' + nombre);
+  }
+
+  /* Aviso de vencimiento para el alumno: 3 días antes, siempre visible */
+  function pintarAvisoAcceso() {
+    let el = document.getElementById('avisoAcceso');
+    const AL = MIRU.almacen;
+    const a = AL.modo === 'supabase' && AL.cuenta() && !MIRU.admin.activo() ? AL.acceso() : null;
+    const ver = a && a.dias >= 0 && a.dias <= 3;
+    if (!ver) { if (el) el.hidden = true; return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'avisoAcceso'; el.className = 'avisoAcceso'; el.setAttribute('role', 'status');
+      $lienzo.parentNode.insertBefore(el, $lienzo);
+    }
+    const cuando = a.dias === 0 ? 'vence hoy' : a.dias === 1 ? 'vence mañana' : 'vence en ' + a.dias + ' días';
+    el.innerHTML = '<span aria-hidden="true">⏳</span><span>Tu acceso a Cirugía I <strong>' + cuando + '</strong> (' + U.esc(U.fecha(a.hasta + 'T12:00:00')) + '). ' +
+      'Escríbele a la administradora para renovarlo; al vencer, el contenido se cierra solo.</span>';
+    el.hidden = false;
   }
 
   function pintarCabecera() {
@@ -181,6 +198,8 @@
     pintarMiga(migas);
     pintarNav(ruta);
     pintarCabecera();
+    pintarAvisoAcceso();
+    if (MIRU.proteccion) MIRU.proteccion.aplicar();
     activarTodo($lienzo);
     $lateral.classList.remove('abierta');
     document.body.classList.remove('menu-abierto');
@@ -449,7 +468,11 @@
     }
 
     // Administradora: cuántas sugerencias nuevas hay (globito del menú)
-    if (MIRU.admin.activo()) MIRU.sugerencias.refrescarNuevas().then(n => { if (n) pintarNav(location.hash || '#/'); });
+    if (MIRU.admin.activo()) {
+      MIRU.sugerencias.refrescarNuevas().then(n => { if (n) pintarNav(location.hash || '#/'); });
+      MIRU.admin.refrescarCobros().then(n => { if (n) pintarNav(location.hash || '#/'); });
+    }
+    if (MIRU.proteccion) MIRU.proteccion.aplicar();
 
     if (hayPerfil) {
       P().respaldoDiario();
@@ -462,7 +485,7 @@
     }
   }
 
-  MIRU.app = { enrutar, pintarNav: () => pintarNav(location.hash || '#/') };
+  MIRU.app = { enrutar, pintarNav: () => pintarNav(location.hash || '#/'), pintarAvisoAcceso: () => { if ($lienzo) pintarAvisoAcceso(); } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
   else arrancar();
 

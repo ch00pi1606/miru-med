@@ -492,7 +492,7 @@
           '<div class="resultado-botones">' +
             '<button class="boton" data-acc="nuevo" type="button">Nuevo simulacro</button>' +
             '<button class="boton boton-suave" data-acc="volver" type="button">Volver</button>' +
-            '<button class="boton boton-suave" data-acc="imprimir" type="button">Imprimir revisión</button>' +
+            (MIRU.proteccion && MIRU.proteccion.corresponde() ? '' : '<button class="boton boton-suave" data-acc="imprimir" type="button">Imprimir revisión</button>') +
           '</div></div></header>' +
       '<section><h2 class="cinta">Por ' + (tipo === 'generalidades' ? 'semana' : mods.length > 1 ? 'especialidad' : 'clase') + '</h2>' +
         '<div class="planificador planificador--' + Math.min(mods.length, 4) + '">' + columnas + '</div></section>' +
@@ -511,7 +511,7 @@
       const a = b.dataset.acc;
       if (a === 'nuevo') location.hash = '#/simulacro/' + tipo + (modId ? '/' + modId : '');
       else if (a === 'volver') location.hash = '#/simulacro/' + tipo + (modId ? '/' + modId : '');
-      else if (a === 'imprimir') window.print();
+      else if (a === 'imprimir' && !(MIRU.proteccion && MIRU.proteccion.activa())) window.print();
       else if (a === 'abrir') {
         const ds = cont.querySelectorAll('details.revisar');
         const abrir = Array.prototype.some.call(ds, d => !d.open);

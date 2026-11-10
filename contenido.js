@@ -150,7 +150,7 @@
     if (CFG.modo === 'supabase' && MIRU.almacen && MIRU.almacen.recuperarLlave) {
       try { crudo = await MIRU.almacen.recuperarLlave(paq.idLlave); } catch (e) { crudo = null; }
     }
-    // Hay que activar: código de prueba (o, con Supabase, número miru + código de 1 minuto)
+    // Hay que activar: código de prueba (o, con Supabase, número miru + código de 5 minutos)
     if (!crudo) crudo = await pedirCodigo(paq);
     llave = await importarLlave(crudo);
     await guardarLlave(llave, paq.idLlave);

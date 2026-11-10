@@ -1,9 +1,13 @@
-# miru · carpeta de publicación
+# miru · publicación para GitHub (2026-11-04)
 
-Versión del contenido: **2026.11.03-1** (2026-11-03).
+Versión plana: todos los archivos van sueltos, sin carpetas.
 
-Versión plana: todos los archivos van sueltos, sin carpetas. Sube TODOS los archivos de esta carpeta a la raíz de tu repositorio de GitHub y activa GitHub Pages (Settings → Pages → rama main, carpeta /root).
+**Qué cambió:** código de 5 minutos, términos de uso al activar, planes (Prueba, Mensual, Semestral, Cortesía) con «Renovar», «Plan y fecha» y «Por cobrar», cierre automático al vencer y protección del contenido (marca de agua, sin copiar ni imprimir).
 
-El contenido viaja cifrado en `paquete.js`. Cada alumno lo abre con su número miru y un código de un minuto que genera la administradora; ella entra con su usuario y contraseña. La llave vive en Supabase (`llave-supabase.sql`, que NO se sube).
+**Cómo subirla**
+1. Primero, en Supabase → SQL Editor, ejecuta el `miru.sql` nuevo (carpeta «Supabase (2026-11-04)»).
+2. En GitHub: Add file → Upload files → arrastra TODOS los archivos de esta carpeta → Commit changes.
+3. Esta carpeta **no trae `config.js`** a propósito: el tuyo en GitHub ya tiene la URL y la clave de Supabase y se queda como está.
+4. Hay un archivo nuevo, `proteccion.js`: asegúrate de que se suba.
 
-Antes de usarla, abre `config.js` y pega en `url` y `clavePublica` los datos de tu proyecto de Supabase (Project Settings → API). Nunca pongas ahí la secret key ni la service_role.
+La llave del contenido no cambió: no hace falta volver a ejecutar `llave-supabase.sql`.

@@ -15,7 +15,7 @@ const BASICOS = [
   'ui.js', 'preguntas.js', 'pasitos.js',
   'evaluacion.js', 'flashcards.js', 'esquemas.js',
   'casos.js', 'oral.js', 'laminas.js',
-  'vistas.js', 'sugerencias.js', 'admin.js', 'app.js',
+  'vistas.js', 'sugerencias.js', 'admin.js', 'proteccion.js', 'app.js',
   'paquete.js',
   'miru-180.png', 'miru-192.png', 'miru-512.png'
 ];

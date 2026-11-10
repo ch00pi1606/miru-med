@@ -2,7 +2,7 @@
    miru · ALMACÉN — persistencia intercambiable
    'local'     El progreso vive solo en este navegador (por perfil).
    'supabase'  Además se sincroniza con Supabase. Hay dos formas de entrar:
-     · ALUMNO: número miru + código de 1 minuto (inicio de sesión único).
+     · ALUMNO: número miru + código de 5 minutos (inicio de sesión único).
        El dispositivo crea una sesión anónima de Supabase y, al canjear el
        código, queda ligado al alumno. Un dispositivo a la vez.
      · ADMINISTRADORA: usuario (correo) y contraseña de Supabase Auth.
@@ -25,6 +25,7 @@
   const CURSO = CFG.curso || 'cir1';
   const DIAS_SIN_RED = 30;
   const LATIDO_MS = 5 * 60 * 1000;
+  const REVISAR_VENCE_MS = 60 * 1000;   // cada minuto: ¿pasó la medianoche del último día?
   const SIN_RED = 'sin_red', SIN_SESION = 'sin_sesion';
 
   const P = () => MIRU.progreso;
@@ -39,6 +40,38 @@
   class ErrorMiru extends Error {
     constructor(mensaje, codigo, estado) { super(mensaje); this.codigo = codigo || ''; this.estado = estado || 0; }
   }
+
+  /* ================================================ planes de acceso
+     Las mismas reglas que privado.plan_hasta() en miru.sql. Aquí solo
+     sirven para mostrar fechas; la que vale es la que guarda el servidor. */
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const deIso = s => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d, 12); };
+  const PLANES = MIRU.planes = {
+    lista: ['prueba', 'mensual', 'semestral', 'cortesia'],
+    nombre: p => ({ prueba: 'Prueba', mensual: 'Mensual', semestral: 'Semestral', cortesia: 'Cortesía', pago: 'Mensual' }[p] || p || '—'),
+    detalle: p => ({ prueba: '7 días desde que active su dispositivo', mensual: '1 mes', semestral: '16 semanas', cortesia: 'fecha a mano' }[p] || ''),
+    hoy: () => iso(new Date()),
+    /** Último día de acceso de un plan que empieza el día «desde» (incluido). */
+    hasta(plan, desde) {
+      const d = deIso(desde || PLANES.hoy());
+      if (plan === 'prueba') d.setDate(d.getDate() + 6);
+      else if (plan === 'mensual' || plan === 'pago') {
+        const dia = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1);
+        d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+        d.setDate(d.getDate() - 1);
+      } else if (plan === 'semestral') d.setDate(d.getDate() + 16 * 7 - 1);
+      else return null;
+      return iso(d);
+    },
+    /** Inicio del periodo que se paga hoy: el día siguiente al fin si sigue vigente. */
+    inicioRenovacion(hastaActual, pendiente) {
+      const hoy = PLANES.hoy();
+      if (!hastaActual || pendiente || hastaActual < hoy) return hoy;
+      const d = deIso(hastaActual); d.setDate(d.getDate() + 1); return iso(d);
+    },
+    /** Días que faltan para el último día (0 = vence hoy; negativo = venció). */
+    dias: hasta => Math.round((deIso(hasta) - deIso(PLANES.hoy())) / 864e5)
+  };
 
   /* =================================================== cliente de Supabase */
   const base = () => String(SB.url || '').replace(/\/+$/, '');
@@ -159,14 +192,15 @@
     guardarSesion('sesion', r);
   }
 
-  /** Canjea número miru + código de 1 minuto. Devuelve la llave cruda del
+  /** Canjea número miru + código de 5 minutos. Devuelve la llave cruda del
       contenido (o null si el contenido no está cifrado). */
-  A.activarCodigo = async function (numero, codigo, idLlave) {
+  A.activarCodigo = async function (numero, codigo, idLlave, terminos) {
     if (!configurado()) throw new ErrorMiru('Falta configurar Supabase en config.js (url y clave pública).');
     if (!/\d/.test(String(numero || ''))) throw new ErrorMiru('Escribe tu número miru (por ejemplo, MIRU-0001).');
     if (normalizar(codigo).length !== 6) throw new ErrorMiru('El código tiene 6 caracteres (por ejemplo, ABC-123).');
+    if (!terminos) throw new ErrorMiru('Para activar miru, marca que aceptas los términos de uso.');
     await asegurarSesionAnonima();
-    const args = { p_numero: String(numero), p_codigo: String(codigo), p_etiqueta: etiquetaDispositivo() };
+    const args = { p_numero: String(numero), p_codigo: String(codigo), p_etiqueta: etiquetaDispositivo(), p_terminos: true };
     let r;
     try { r = await rpc('sesion', 'canjear_codigo', args); }
     catch (e) {
@@ -180,7 +214,7 @@
     escribir(K.cuenta, {
       alumnoId: r.alumno.id, numero: r.alumno.numero, codigo: r.alumno.codigo, nombre: r.alumno.nombre,
       dispositivo: r.dispositivo, activado: Date.now(), ultimoOk: Date.now(), version: null,
-      cursos: cursos.map(x => ({ curso: x.curso, hasta: x.hasta, id_llave: x.id_llave }))
+      cursos: cursos.map(x => ({ curso: x.curso, hasta: x.hasta, plan: x.plan, id_llave: x.id_llave }))
     });
     return llaveDe(cursos, idLlave, true);
   };
@@ -208,8 +242,16 @@
         const cuenta = leer(K.cuenta);
         const r = await rpc('sesion', 'latido', { p_dispositivo: cuenta.dispositivo });
         if (!r.activo) { olvidarCuenta(); return null; }
+        guardarAccesos(r);
+        // Dispositivo bien, pero el acceso venció: no se pide código, se avisa
+        if (!(r.cursos || []).some(x => x.curso === CURSO)) return pantallaVencido(accesoLocal(), false);
         return llaveDe(r.cursos, idLlave, false);
-      } catch (e) { if (e.codigo === SIN_SESION) olvidarCuenta(); return null; }
+      } catch (e) {
+        if (e.codigo === SIN_SESION) { olvidarCuenta(); return null; }
+        // Sin red y sin llave guardada: si según este dispositivo ya venció, se dice
+        if (vencioLocal()) return pantallaVencido(accesoLocal(), true);
+        return null;
+      }
     }
     if (leer(K.admin)) {
       try {
@@ -269,7 +311,7 @@
   };
 
   /* ================================================= arranque y latido */
-  let tLatido = null, tSync = null, sincronizando = false, repetir = false;
+  let tLatido = null, tSync = null, tVence = null, sincronizando = false, repetir = false;
 
   function vincularPerfil() {
     const cuenta = leer(K.cuenta); if (!cuenta) return;
@@ -299,15 +341,65 @@
       return null;
     }
     if (!r.activo) { await expulsar(r.motivo); return false; }
+    guardarAccesos(r);
     if (!(r.cursos || []).some(x => x.curso === CURSO)) {
-      await expulsar('Tu acceso a Cirugía I no está vigente. Escríbele a la administradora para renovarlo.');
+      await bloquearVencido(false);
       return false;
     }
     const c = leer(K.cuenta) || cuenta;
-    Object.assign(c, { nombre: r.alumno.nombre, ultimoOk: Date.now(), cursos: r.cursos.map(x => ({ curso: x.curso, hasta: x.hasta, id_llave: x.id_llave })) });
+    Object.assign(c, { nombre: r.alumno.nombre, ultimoOk: Date.now(), cursos: r.cursos.map(x => ({ curso: x.curso, hasta: x.hasta, plan: x.plan, id_llave: x.id_llave })) });
     escribir(K.cuenta, c);
+    if (MIRU.app && MIRU.app.pintarAvisoAcceso) MIRU.app.pintarAvisoAcceso();
     if (A.estado === 'sin-conexion' || A.estado === 'error') { A.estado = 'pendiente'; avisar(); }
     return true;
+  }
+
+  /* --------------------------------------------- acceso vencido
+     El dispositivo sigue ligado (no hace falta código nuevo): al renovar,
+     la administradora no tiene que hacer nada más y el alumno solo pulsa
+     «Ya renové». Mientras tanto, la llave del contenido se borra. */
+  function guardarAccesos(r) {
+    const c = leer(K.cuenta); if (!c) return;
+    const a = (r.accesos || []).find(x => x.curso === CURSO);
+    c.acceso = a ? { hasta: a.hasta, plan: a.plan, vigente: !!a.vigente } : null;
+    escribir(K.cuenta, c);
+  }
+  function accesoLocal() {
+    const c = leer(K.cuenta); if (!c) return null;
+    const v = (c.cursos || []).find(x => x.curso === CURSO);
+    return c.acceso || (v ? { hasta: v.hasta, plan: v.plan, vigente: true } : null);
+  }
+  /** Según el reloj de este dispositivo, ¿ya pasó el último día? */
+  function vencioLocal() {
+    const a = accesoLocal();
+    return !!(a && a.hasta && String(a.hasta).slice(0, 10) < PLANES.hoy());
+  }
+  A.acceso = () => {
+    const a = accesoLocal(); if (!a || !a.hasta) return null;
+    return { hasta: String(a.hasta).slice(0, 10), plan: a.plan, dias: PLANES.dias(a.hasta) };
+  };
+
+  let bloqueado = false;
+  async function bloquearVencido(sinRed) {
+    if (bloqueado) return;
+    bloqueado = true;
+    clearTimeout(tSync); clearInterval(tLatido); clearInterval(tVence);
+    try { await A.sincronizar(false); } catch (e) {}
+    try { await MIRU.contenido.olvidarLlave(); } catch (e) {}
+    const lz = document.getElementById('lienzo'); if (lz) lz.innerHTML = '';
+    A.estado = 'vencido'; avisar();
+    pantallaVencido(accesoLocal(), sinRed);
+  }
+
+  function pantallaVencido(a, sinRed) {
+    const f = a && a.hasta ? MIRU.util.fecha(String(a.hasta).slice(0, 10) + 'T12:00:00') : '';
+    const plan = a && a.plan ? ' (plan ' + PLANES.nombre(a.plan).toLowerCase() + ')' : '';
+    pantallaMensaje('Tu acceso venció',
+      sinRed ? 'Según este dispositivo, tu acceso a Cirugía I' + plan + ' venció' + (f ? ' el ' + f : '') + '. Si ya lo renovaste, conéctate a internet y pulsa el botón para comprobarlo.'
+             : 'Tu acceso a Cirugía I' + plan + ' venció' + (f ? ' el ' + f : '') + '. Escríbele a la administradora para renovarlo.',
+      'Tu progreso está guardado. Cuando renueves, no necesitas un código nuevo: solo vuelve a abrir miru.',
+      'Ya renové: comprobar', () => global.location.reload());
+    return new Promise(() => {});
   }
 
   async function expulsar(motivo) {
@@ -339,7 +431,13 @@
       vincularPerfil();
       A.estado = 'pendiente';
       const cuenta = leer(K.cuenta);
-      if (Date.now() - (cuenta.ultimoOk || 0) > DIAS_SIN_RED * 864e5) {
+      if (vencioLocal()) {
+        // Según este dispositivo ya venció: se comprueba con el servidor (quizá renovó)
+        const ok = await comprobar();
+        if (ok === null) { await bloquearVencido(true); return new Promise(() => {}); }
+        if (!ok) return new Promise(() => {});
+        A.sincronizar(true);
+      } else if (Date.now() - (cuenta.ultimoOk || 0) > DIAS_SIN_RED * 864e5) {
         // Mucho tiempo sin comprobar el acceso: hace falta internet una vez
         let ok = await comprobar();
         while (ok === null) { await pantallaSinRed(); ok = await comprobar(); }
@@ -348,6 +446,12 @@
         comprobar().then(ok => { if (ok) A.sincronizar(true); });
       }
       tLatido = setInterval(() => { if (!document.hidden) comprobar(); }, LATIDO_MS);
+      // A medianoche del último día se cierra solo, con o sin internet
+      tVence = setInterval(async () => {
+        if (!vencioLocal()) return;
+        const ok = await comprobar();
+        if (ok === null) bloquearVencido(true);
+      }, REVISAR_VENCE_MS);
       global.addEventListener('online', () => comprobar().then(ok => { if (ok) A.sincronizar(true); }));
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) { if (A.estado === 'pendiente') { clearTimeout(tSync); A.sincronizar(false); } }
@@ -493,6 +597,7 @@
       case 'error': return { t: 'No se pudo sincronizar' + (A.error ? ' (' + A.error + ')' : ''), i: '⚠️' };
       case 'admin': return { t: 'Sesión de administradora', i: '🛠' };
       case 'cerrada': return { t: 'Sesión cerrada', i: '🔒' };
+      case 'vencido': return { t: 'Acceso vencido', i: '🔒' };
       default: return { t: 'Guardado en este dispositivo', i: '💾' };
     }
   };
@@ -501,6 +606,16 @@
     document.querySelectorAll('[data-sinc]').forEach(el => { el.textContent = e.i + ' ' + e.t; });
   }
   A.pintarEstado = avisar;
+
+  /* ==================================================== términos de uso */
+  A.terminosHtml = () =>
+    '<p><strong>Términos de uso de miru</strong></p><ul>' +
+    '<li>Tu acceso es personal: solo tú puedes usarlo, en un dispositivo a la vez.</li>' +
+    '<li>No compartas el contenido (láminas, preguntas, flashcards, casos ni simulacros) con nadie: ni capturas, ni fotos, ni copias, ni grabaciones, ni reenvíos.</li>' +
+    '<li>Todo el contenido lleva tu número miru como marca de agua.</li>' +
+    '<li>Si se comparte, la administradora puede suspender tu acceso sin reembolso.</li>' +
+    '<li>El acceso dura lo que dice tu plan. Al vencer, el contenido se cierra solo hasta que renueves; tu progreso se conserva.</li>' +
+    '<li>miru es material de estudio: no reemplaza tus clases, tus libros ni las guías clínicas.</li></ul>';
 
   /* =========================================================== pantallas */
   function montar(html) {
@@ -540,8 +655,10 @@
         '<form data-f="alumno" novalidate' + (op.soloAdmin ? ' hidden' : '') + '>' +
         '<label class="acceso__lbl" for="accNumero">Tu número miru</label>' +
         '<input class="acceso__in" id="accNumero" name="numero" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="MIRU-0001" value="' + esc(numero) + '">' +
-        '<label class="acceso__lbl" for="accCodigo">Código de 1 minuto</label>' +
+        '<label class="acceso__lbl" for="accCodigo">Código de 5 minutos</label>' +
         '<input class="acceso__in" id="accCodigo" name="codigo" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="ABC-123" maxlength="9">' +
+        '<label class="acceso__terminos"><input type="checkbox" name="terminos"> <span>Acepto los <button type="button" class="acceso__enlace" data-ver-terminos>términos de uso</button>: el contenido es solo para mí.</span></label>' +
+        '<div class="acceso__textoTerminos" data-terminos hidden>' + A.terminosHtml() + '</div>' +
         '<div class="acceso__msg" role="alert"></div>' +
         '<button class="btn btn--pri acceso__enviar" type="submit">Activar</button>' +
         '<p class="acceso__pie">Un dispositivo a la vez: si activas miru en otro, este se cierra. Tu progreso se guarda en tu cuenta y te sigue.</p>' +
@@ -562,12 +679,14 @@
       function mostrar(cual) {
         fA.hidden = cual !== 'alumno'; fD.hidden = cual !== 'admin';
         tit.textContent = cual === 'admin' ? 'Entrar como administradora' : 'Activa miru en este dispositivo';
-        sub.textContent = cual === 'admin' ? 'Con tu usuario (correo) y contraseña.' : 'Escribe tu número miru y el código de 1 minuto que te da la administradora.';
+        sub.textContent = cual === 'admin' ? 'Con tu usuario (correo) y contraseña.' : 'Escribe tu número miru y el código de 5 minutos que te da la administradora.';
         const f = cual === 'admin' ? fD : fA;
         setTimeout(() => { const i = [...f.querySelectorAll('input')].find(x => !x.value) || f.querySelector('input'); i.focus(); }, 50);
       }
       mostrar(op.soloAdmin ? 'admin' : 'alumno');
       v.querySelectorAll('[data-ir-a]').forEach(b => b.addEventListener('click', () => mostrar(b.dataset.irA)));
+      const verT = v.querySelector('[data-ver-terminos]');
+      if (verT) verT.addEventListener('click', e => { e.preventDefault(); const t = v.querySelector('[data-terminos]'); t.hidden = !t.hidden; });
       const cancelar = v.querySelector('[data-cancelar]');
       if (cancelar) cancelar.addEventListener('click', () => { desmontar(v); resolve(null); });
 
@@ -585,7 +704,7 @@
           } finally { btn.disabled = false; btn.textContent = texto; }
         });
       }
-      enviar(fA, () => A.activarCodigo(fA.numero.value, fA.codigo.value, op.idLlave), 'Activar');
+      enviar(fA, () => A.activarCodigo(fA.numero.value, fA.codigo.value, op.idLlave, fA.terminos.checked), 'Activar');
       enviar(fD, () => A.entrarAdmin(fD.usuario.value, fD.clave.value, op.idLlave), 'Entrar');
     });
   };

@@ -16,6 +16,7 @@
       document.getElementById('dialogo-aceptar').textContent = aceptar || 'Aceptar';
       document.getElementById('dialogo-cancelar').textContent = cancelar || 'Cancelar';
       document.getElementById('dialogo-campo').hidden = true;
+      document.getElementById('dialogo-extra').hidden = true;
       if (typeof d.showModal !== 'function') { if (global.confirm(titulo + '\n\n' + texto)) alAceptar(); return; }
       d.returnValue = '';
       d.onclose = function () { if (d.returnValue === 'aceptar') alAceptar(); };
@@ -33,11 +34,32 @@
         const campo = document.getElementById('dialogo-campo');
         const inp = campo.querySelector('input');
         campo.hidden = false; inp.type = tipo || 'text'; inp.value = valor || '';
+        document.getElementById('dialogo-extra').hidden = true;
         if (typeof d.showModal !== 'function') { resolve(global.prompt(titulo, valor || '')); return; }
         d.returnValue = '';
         d.onclose = function () { campo.hidden = true; resolve(d.returnValue === 'aceptar' ? inp.value : null); };
         d.showModal();
         setTimeout(() => inp.focus(), 30);
+      });
+    },
+
+    /** Diálogo con un formulario propio. html: los campos; alAbrir(caja)
+        los prepara. Resuelve con la caja (para leer los campos) o null. */
+    formulario(titulo, texto, html, aceptar, alAbrir) {
+      return new Promise(resolve => {
+        const d = document.getElementById('dialogo');
+        const extra = document.getElementById('dialogo-extra');
+        document.getElementById('dialogo-titulo').textContent = titulo;
+        document.getElementById('dialogo-texto').textContent = texto || '';
+        document.getElementById('dialogo-aceptar').textContent = aceptar || 'Guardar';
+        document.getElementById('dialogo-cancelar').textContent = 'Cancelar';
+        document.getElementById('dialogo-campo').hidden = true;
+        extra.innerHTML = html; extra.hidden = false;
+        if (alAbrir) alAbrir(extra);
+        if (typeof d.showModal !== 'function') { resolve(null); return; }
+        d.returnValue = '';
+        d.onclose = function () { const ok = d.returnValue === 'aceptar'; resolve(ok ? extra : null); setTimeout(() => { if (!d.open) { extra.hidden = true; extra.innerHTML = ''; } }, 0); };
+        d.showModal();
       });
     },
 

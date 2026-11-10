@@ -194,7 +194,7 @@
         '<div data-res-prueba></div></div>' +
 
         (SB() ? '<div class="tj"><h3>Bitácora</h3><details class="acor" data-bitacora><summary class="acor__b">Ver tus últimas acciones</summary><div class="acor__c" data-bit><p class="nota">Cargando…</p></div></details></div>'
-          : '<div class="tj"><h3>Códigos de acceso</h3><p class="nota">Ahora miru usa un <strong>código de prueba</strong> fijo, definido al construir la publicación. Con Supabase (config.js → modo: \'supabase\'), cada alumno entra con su número miru y un código de un minuto.</p></div>');
+          : '<div class="tj"><h3>Códigos de acceso</h3><p class="nota">Ahora miru usa un <strong>código de prueba</strong> fijo, definido al construir la publicación. Con Supabase (config.js → modo: \'supabase\'), cada alumno entra con su número miru y un código de 5 minutos.</p></div>');
     },
 
     activar(raiz) {
@@ -213,20 +213,81 @@
     },
 
     /* ================================================ ALUMNOS (Supabase) */
+    cobros: 0,
+    /** Número rojo del menú: sugerencias nuevas + alumnos por cobrar. */
+    pendientes() { return ((MIRU.sugerencias || {}).nuevas || 0) + (A.cobros || 0); },
+    async refrescarCobros() {
+      if (!SB() || !A.activo()) { A.cobros = 0; return 0; }
+      try { A.cobros = +(await AL().rpcAdmin('admin_cobros_pendientes', { p_curso: CFG.curso || 'cir1' })) || 0; } catch (e) { /* sin red o SQL sin actualizar */ }
+      return A.cobros;
+    },
+
     htmlAlumnos() {
       const yo = AL().adminInfo() || {};
+      const PL = MIRU.planes;
       return '<div class="tj"><h3>Alumnos</h3>' +
         '<p class="nota">Sesión de administradora: <strong>' + U.esc(yo.nombre || yo.email || '—') + '</strong>' + (yo.email && yo.nombre ? ' (' + U.esc(yo.email) + ')' : '') +
         ' · <button class="btn btn--sm" data-acc="admin-salir" type="button">Cerrar sesión</button></p>' +
+        '<div data-cobros></div>' +
         '<details class="acor"><summary class="acor__b">＋ Crear alumno</summary><div class="acor__c">' +
         '<form data-form="alumno" class="formAlumno" novalidate>' +
         '<label class="campo"><span class="campo__l">Nombre y apellido</span><input name="nombre" maxlength="60" required autocomplete="off"></label>' +
         '<label class="campo"><span class="campo__l">Código universitario (opcional)</span><input name="cu" maxlength="20" autocomplete="off"></label>' +
-        '<label class="campo"><span class="campo__l">Acceso a Cirugía I hasta</span><input name="hasta" type="date" value="' + enDias(120) + '"></label>' +
-        '<label class="campo"><span class="campo__l">Tipo de acceso</span><select name="origen"><option value="prueba">Prueba</option><option value="pago">Pago</option><option value="cortesia">Cortesía</option></select></label>' +
+        '<label class="campo"><span class="campo__l">Plan</span><select name="origen">' +
+        PL.lista.map(p => '<option value="' + p + '">' + PL.nombre(p) + ' · ' + PL.detalle(p) + '</option>').join('') + '</select></label>' +
+        '<label class="campo"><span class="campo__l">Acceso a Cirugía I hasta</span><input name="hasta" type="date"><span class="nota" data-ayuda-hasta></span></label>' +
         '<button class="btn btn--pri" type="submit">Crear alumno</button></form></div></details>' +
         '<div data-codigo></div>' +
         '<div data-lista><p class="nota">Cargando alumnos…</p></div></div>';
+    },
+
+    /** Estado del acceso de un alumno, en palabras. */
+    estadoAcceso(c) {
+      if (!c) return { clase: 'neu', t: 'sin acceso' };
+      if (c.inicia_al_activar) return { clase: 'neu', t: 'empieza al activar (7 días)' };
+      const d = c.dias != null ? c.dias : MIRU.planes.dias(c.hasta);
+      if (d < 0) return { clase: 'bad', t: 'venció ' + diaLocal(c.hasta), d };
+      if (!c.vigente) return { clase: 'neu', t: 'desde ' + diaLocal(c.desde), d };
+      return { clase: d <= 3 ? 'aviso' : 'ok', t: 'hasta ' + diaLocal(c.hasta) + ' · ' + (d === 0 ? 'vence hoy' : d === 1 ? 'queda 1 día' : 'quedan ' + d + ' días'), d };
+    },
+
+    mensajeCobro(a, c) {
+      const f = diaLocal(c.hasta), d = MIRU.planes.dias(c.hasta), nom = (a.nombre || '').split(' ')[0];
+      if (d < 0) return 'Hola, ' + nom + ' 👋 Tu acceso a miru (Cirugía I) venció el ' + f + ' y el contenido se cerró. Cuando renueves, solo vuelve a abrir miru: tu progreso sigue guardado y no necesitas un código nuevo.';
+      if (c.origen === 'prueba') return 'Hola, ' + nom + ' 👋 Tu prueba de miru (Cirugía I) termina el ' + f + '. Si quieres seguir estudiando, avísame para activarte el plan mensual o semestral. Tu progreso se conserva.';
+      return 'Hola, ' + nom + ' 👋 Tu acceso a miru (Cirugía I, plan ' + MIRU.planes.nombre(c.origen).toLowerCase() + ') vence el ' + f + '. Para seguir estudiando sin cortes, renueva antes de esa fecha. ¡Gracias!';
+    },
+
+    async copiar(texto) {
+      try { await navigator.clipboard.writeText(texto); MIRU.ui.aviso('Mensaje copiado. Pégalo en WhatsApp.'); }
+      catch (e) { MIRU.ui.aviso(U.esc(texto), 'info', 15000); }
+    },
+
+    pintarCobros(raiz, lista) {
+      const el = raiz.querySelector('[data-cobros]'); if (!el) return;
+      const curso = CFG.curso || 'cir1';
+      const filas = [];
+      lista.forEach(a => {
+        if (a.estado !== 'activo') return;
+        const c = (a.cursos || []).find(x => x.curso === curso);
+        if (!c || c.origen === 'cortesia' || c.inicia_al_activar) return;
+        const d = MIRU.planes.dias(c.hasta);
+        if (d <= 3 && d >= -30) filas.push({ a, c, d });
+      });
+      filas.sort((x, y) => x.d - y.d);
+      // Mismo criterio que admin_cobros_pendientes (número rojo del menú)
+      const n = filas.filter(x => x.d >= -7).length;
+      if (n !== A.cobros) { A.cobros = n; if (MIRU.app && MIRU.app.pintarNav) MIRU.app.pintarNav(); }
+      if (!filas.length) { el.innerHTML = ''; return; }
+      const fila = x => '<li class="cobro cobro--' + (x.d < 0 ? 'vencido' : 'pronto') + '"><div><strong>' + U.esc(x.a.codigo) + '</strong> · ' + U.esc(x.a.nombre) +
+        '<br><span class="nota">' + U.esc(MIRU.planes.nombre(x.c.origen)) + ' · ' + U.esc(A.estadoAcceso(x.c).t) + '</span></div>' +
+        '<div class="tira"><button class="btn btn--sm" data-acc="al-recordar" data-num="' + x.a.numero + '" type="button">📋 Recordatorio</button>' +
+        '<button class="btn btn--sm btn--pri" data-acc="al-renovar" data-num="' + x.a.numero + '" type="button">💳 Renovar</button></div></li>';
+      const pronto = filas.filter(x => x.d >= 0), venc = filas.filter(x => x.d < 0);
+      el.innerHTML = '<div class="cobros"><h4>💰 Por cobrar</h4>' +
+        (pronto.length ? '<p class="nota">Vencen en 3 días o menos:</p><ul class="cobros__l">' + pronto.map(fila).join('') + '</ul>' : '') +
+        (venc.length ? '<p class="nota">Vencidos (último mes). Su contenido ya está cerrado:</p><ul class="cobros__l">' + venc.map(fila).join('') + '</ul>' : '') +
+        '<p class="nota">«Recordatorio» copia un mensaje para WhatsApp. «Renovar» registra el pago: si aún no venció, el periodo nuevo empieza al día siguiente del fin.</p></div>';
     },
 
     async cargarAlumnos(raiz) {
@@ -235,12 +296,13 @@
       try { lista = await AL().rpcAdmin('admin_alumnos', {}); }
       catch (e) { el.innerHTML = '<p class="nota">⚠️ ' + U.esc(e.message) + '</p>'; return; }
       A._alumnos = lista;
+      A.pintarCobros(raiz, lista);
       if (!lista.length) { el.innerHTML = '<p class="nota">Aún no hay alumnos. Crea el primero arriba.</p>'; return; }
-      const hoy = enDias(0);
-      el.innerHTML = '<div class="tablaWrap"><table class="t tAlumnos"><thead><tr><th>N.º miru</th><th>Alumno</th><th>Cirugía I</th><th>Dispositivo</th><th>Acciones</th></tr></thead><tbody>' +
+      el.innerHTML = '<div class="tablaWrap"><table class="t tAlumnos"><thead><tr><th>N.º miru</th><th>Alumno</th><th>Plan y acceso</th><th>Dispositivo</th><th>Acciones</th></tr></thead><tbody>' +
         lista.map(a => {
           const c = (a.cursos || []).find(x => x.curso === (CFG.curso || 'cir1'));
-          const acceso = c ? (c.vigente ? '<span class="eti eti--ok">hasta ' + diaLocal(c.hasta) + '</span>' : '<span class="eti eti--bad">' + (c.hasta < hoy ? 'venció ' + diaLocal(c.hasta) : 'desde ' + diaLocal(c.desde)) + '</span>') + '<br><span class="nota">' + U.esc(c.origen) + '</span>'
+          const e = A.estadoAcceso(c);
+          const acceso = c ? '<span class="eti eti--plan">' + U.esc(MIRU.planes.nombre(c.origen)) + '</span><br><span class="eti eti--' + e.clase + '">' + U.esc(e.t) + '</span>'
             : '<span class="eti eti--neu">sin acceso</span>';
           const d = a.dispositivo;
           const disp = d ? U.esc(d.etiqueta || 'Dispositivo') + '<br><span class="nota">usado ' + U.fechaCorta(d.ultimo_uso) + '</span>' : '<span class="nota">ninguno activo</span>';
@@ -249,26 +311,25 @@
             '<td>' + U.esc(a.nombre) + (a.codigo_universitario ? '<br><span class="nota">' + U.esc(a.codigo_universitario) + '</span>' : '') + (susp ? '<br><span class="eti eti--bad">suspendido</span>' : '') + '</td>' +
             '<td>' + acceso + '</td><td>' + disp + '</td>' +
             '<td><div class="tira">' +
-            (susp ? '' : '<button class="btn btn--sm btn--pri" data-acc="al-codigo" data-num="' + a.numero + '" type="button">🔑 Código 1 min</button>') +
-            '<button class="btn btn--sm" data-acc="al-acceso" data-num="' + a.numero + '" type="button">📅 Acceso</button>' +
+            (susp ? '' : '<button class="btn btn--sm btn--pri" data-acc="al-codigo" data-num="' + a.numero + '" type="button">🔑 Código 5 min</button>') +
+            '<button class="btn btn--sm" data-acc="al-renovar" data-num="' + a.numero + '" type="button">💳 Renovar</button>' +
+            '<button class="btn btn--sm" data-acc="al-acceso" data-num="' + a.numero + '" type="button">📅 Plan y fecha</button>' +
             (d ? '<button class="btn btn--sm" data-acc="al-liberar" data-num="' + a.numero + '" type="button">📵 Liberar</button>' : '') +
             '<button class="btn btn--sm' + (susp ? '' : ' btn--peligro') + '" data-acc="al-estado" data-num="' + a.numero + '" type="button">' + (susp ? 'Reactivar' : 'Suspender') + '</button>' +
             '</div></td></tr>';
         }).join('') + '</tbody></table></div>' +
-        '<p class="nota">«Código 1 min» sirve para activar un dispositivo: el alumno escribe su N.º miru y el código antes de que venza. Si lo activa en otro, el anterior se cierra solo. «Liberar» cierra su dispositivo actual sin darle uno nuevo.</p>';
+        '<p class="nota">«Código 5 min» activa un dispositivo: el alumno escribe su N.º miru y el código antes de que venza. Si lo activa en otro, el anterior se cierra solo. «Renovar» registra un pago mensual o semestral. «Plan y fecha» corrige el plan o la fecha a mano. «Liberar» cierra su dispositivo sin darle uno nuevo.</p>';
     },
 
     mostrarCodigo(raiz, c) {
       const el = raiz.querySelector('[data-codigo]'); if (!el) return;
       clearInterval(A._reloj);
       const fin = new Date(c.expira).getTime();
-      const msj = 'miru · Tu número: ' + c.alumno.codigo + ' · Tu código: ' + c.codigo + ' (vence en 1 minuto). Abre miru, escribe ambos y pulsa Activar.';
+      const msj = 'miru · Tu número: ' + c.alumno.codigo + ' · Tu código: ' + c.codigo + ' (vence en 5 minutos). Abre miru, escribe ambos, acepta los términos y pulsa Activar.';
       el.innerHTML = '<div class="codigoCaja" role="status"><p>Para <strong>' + U.esc(c.alumno.nombre) + '</strong> · ' + U.esc(c.alumno.codigo) + '</p>' +
         '<p class="codigo-grande">' + U.esc(c.codigo) + '</p><p class="nota" data-quedan></p>' +
         '<div class="tira"><button class="btn btn--sm" data-acc="copiar-codigo" type="button">📋 Copiar mensaje</button></div></div>';
-      el.querySelector('[data-acc="copiar-codigo"]').addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(msj); MIRU.ui.aviso('Mensaje copiado.'); } catch (e) { MIRU.ui.aviso(U.esc(msj), 'info', 15000); }
-      });
+      el.querySelector('[data-acc="copiar-codigo"]').addEventListener('click', () => A.copiar(msj));
       const q = el.querySelector('[data-quedan]');
       const tic = () => {
         if (!document.body.contains(q)) { clearInterval(A._reloj); return; }
@@ -280,24 +341,84 @@
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
 
+    /** Diálogo «Renovar»: mensual o semestral, con la fecha que resultará. */
+    async dialogoRenovar(a, c) {
+      const PL = MIRU.planes;
+      const desde = PL.inicioRenovacion(c && c.hasta, c && c.inicia_al_activar);
+      const planIni = c && c.origen === 'semestral' ? 'semestral' : 'mensual';
+      const caja = await MIRU.ui.formulario('Renovar a ' + a.codigo, 'Registra el pago de ' + a.nombre + '.',
+        '<div class="opciones" role="radiogroup" aria-label="Plan">' +
+        ['mensual', 'semestral'].map(p => '<label class="seg-op"><input type="radio" name="plan" value="' + p + '"' + (p === planIni ? ' checked' : '') + '> ' + PL.nombre(p) + ' · ' + PL.detalle(p) + '</label>').join('') + '</div>' +
+        '<p class="nota" data-vista></p>', 'Registrar pago', caja => {
+          const vista = () => {
+            const p = caja.querySelector('input[name="plan"]:checked').value;
+            caja.querySelector('[data-vista]').innerHTML = 'Nuevo periodo: del <strong>' + diaLocal(desde) + '</strong> al <strong>' + diaLocal(PL.hasta(p, desde)) + '</strong>' +
+              (c && !c.inicia_al_activar && c.hasta >= PL.hoy() ? ' (se suma al acceso actual, que vence el ' + diaLocal(c.hasta) + ').' : '.');
+          };
+          caja.querySelectorAll('input[name="plan"]').forEach(i => i.addEventListener('change', vista)); vista();
+        });
+      return caja ? caja.querySelector('input[name="plan"]:checked').value : null;
+    },
+
+    /** Diálogo «Plan y fecha»: corrige el plan y la fecha a mano. */
+    async dialogoPlan(a, c) {
+      const PL = MIRU.planes;
+      const caja = await MIRU.ui.formulario('Plan y fecha de ' + a.codigo, 'Corrige el plan o la fecha final de ' + a.nombre + '. Para registrar un pago, usa «Renovar».',
+        '<label class="campo"><span class="campo__l">Plan</span><select name="plan">' +
+        PL.lista.map(p => '<option value="' + p + '"' + (c && (c.origen === p || (c.origen === 'pago' && p === 'mensual')) ? ' selected' : '') + '>' + PL.nombre(p) + ' · ' + PL.detalle(p) + '</option>').join('') + '</select></label>' +
+        '<label class="campo"><span class="campo__l">Acceso hasta</span><input name="hasta" type="date" value="' + U.esc(c ? c.hasta : enDias(30)) + '"></label>' +
+        '<label class="campo campo--check"><input type="checkbox" name="auto"> <span data-auto-t></span></label>', 'Guardar', caja => {
+          const sel = caja.querySelector('[name="plan"]'), f = caja.querySelector('[name="hasta"]'), auto = caja.querySelector('[name="auto"]'), t = caja.querySelector('[data-auto-t]');
+          const fijo = c ? c.hasta : enDias(30);
+          const vista = () => {
+            const p = sel.value;
+            auto.disabled = p === 'cortesia'; if (p === 'cortesia') auto.checked = false;
+            t.textContent = p === 'cortesia' ? 'Cortesía: elige la fecha a mano.'
+              : p === 'prueba' ? 'Calcular sola: 7 días desde hoy (o desde que active su dispositivo, si nunca lo activó).'
+              : 'Calcular sola: ' + PL.detalle(p) + ' desde hoy (hasta el ' + diaLocal(PL.hasta(p)) + ').';
+            f.disabled = auto.checked;
+            f.value = auto.checked ? (PL.hasta(p) || fijo) : (f.value || fijo);
+          };
+          sel.addEventListener('change', vista); auto.addEventListener('change', vista); vista();
+        });
+      if (!caja) return null;
+      const auto = caja.querySelector('[name="auto"]').checked;
+      return { plan: caja.querySelector('[name="plan"]').value, hasta: auto ? null : caja.querySelector('[name="hasta"]').value };
+    },
+
     activarAlumnos(raiz) {
       A.cargarAlumnos(raiz);
       const lla = async (fn, args, ok) => {
         try { const r = await AL().rpcAdmin(fn, args); if (ok) ok(r); await A.cargarAlumnos(raiz); return r; }
         catch (e) { MIRU.ui.aviso(U.esc(e.message), 'mal'); return null; }
       };
+      const curso = CFG.curso || 'cir1';
       const f = raiz.querySelector('[data-form="alumno"]');
-      if (f) f.addEventListener('submit', async e => {
-        e.preventDefault();
-        const nombre = f.nombre.value.trim();
-        if (!nombre) { MIRU.ui.aviso('Escribe el nombre del alumno.', 'mal'); return; }
-        const r = await lla('admin_crear_alumno', { p_nombre: nombre, p_codigo_universitario: f.cu.value.trim() || null, p_curso: CFG.curso || 'cir1', p_hasta: f.hasta.value || null, p_origen: f.origen.value });
-        if (r) { MIRU.ui.aviso('Creado: <strong>' + U.esc(r.codigo) + '</strong> · ' + U.esc(r.nombre)); f.reset(); f.hasta.value = enDias(120); }
-      });
+      if (f) {
+        const ayuda = f.querySelector('[data-ayuda-hasta]');
+        const segunPlan = () => {
+          const p = f.origen.value;
+          f.hasta.disabled = p === 'prueba';
+          f.hasta.value = p === 'prueba' ? '' : p === 'cortesia' ? (f.hasta.value || enDias(120)) : MIRU.planes.hasta(p);
+          ayuda.textContent = p === 'prueba' ? 'Los 7 días empiezan el día que active su dispositivo.'
+            : p === 'cortesia' ? 'Elige la fecha final.' : MIRU.planes.detalle(p) + ' desde hoy. Puedes cambiar la fecha.';
+        };
+        f.origen.addEventListener('change', segunPlan); segunPlan();
+        f.addEventListener('submit', async e => {
+          e.preventDefault();
+          const nombre = f.nombre.value.trim();
+          if (!nombre) { MIRU.ui.aviso('Escribe el nombre del alumno.', 'mal'); return; }
+          if (f.origen.value === 'cortesia' && !f.hasta.value) { MIRU.ui.aviso('Para cortesía, elige la fecha final.', 'mal'); return; }
+          const r = await lla('admin_crear_alumno', { p_nombre: nombre, p_codigo_universitario: f.cu.value.trim() || null, p_curso: curso,
+            p_hasta: f.origen.value === 'prueba' ? null : (f.hasta.value || null), p_origen: f.origen.value });
+          if (r) { MIRU.ui.aviso('Creado: <strong>' + U.esc(r.codigo) + '</strong> · ' + U.esc(r.nombre)); f.reset(); segunPlan(); }
+        });
+      }
       U.on(raiz, 'click', '[data-acc="admin-salir"]', async () => { await AL().salirAdmin(); MIRU.app.enrutar(); });
       U.on(raiz, 'click', '[data-acc^="al-"]', async function (e, b) {
         const num = +b.dataset.num;
         const a = (A._alumnos || []).find(x => x.numero === num) || { codigo: 'MIRU-' + num, nombre: '' };
+        const c = (a.cursos || []).find(x => x.curso === curso);
         switch (b.dataset.acc) {
           case 'al-codigo': {
             b.disabled = true;
@@ -305,13 +426,22 @@
             catch (err) { MIRU.ui.aviso(U.esc(err.message), 'mal'); }
             b.disabled = false; break;
           }
-          case 'al-acceso': {
-            const c = (a.cursos || []).find(x => x.curso === (CFG.curso || 'cir1'));
-            const v = await MIRU.ui.pedirTexto('Acceso de ' + a.codigo, 'Fecha final del acceso a Cirugía I para ' + a.nombre + '.', c && c.hasta >= enDias(0) ? c.hasta : enDias(120), 'date');
-            if (!v) return;
-            await lla('admin_habilitar_curso', { p_numero: num, p_curso: CFG.curso || 'cir1', p_hasta: v, p_origen: c ? c.origen : 'pago' }, () => MIRU.ui.aviso('Acceso hasta el ' + diaLocal(v) + '.'));
+          case 'al-renovar': {
+            const plan = await A.dialogoRenovar(a, c);
+            if (!plan) return;
+            await lla('admin_renovar', { p_numero: num, p_curso: curso, p_plan: plan },
+              r => MIRU.ui.aviso('Pago registrado: ' + U.esc(MIRU.planes.nombre(r.plan)) + ' hasta el ' + diaLocal(r.hasta) + '.'));
             break;
           }
+          case 'al-acceso': {
+            const v = await A.dialogoPlan(a, c);
+            if (!v) return;
+            if (!v.hasta && v.plan === 'cortesia') { MIRU.ui.aviso('Para cortesía, elige la fecha final.', 'mal'); return; }
+            await lla('admin_habilitar_curso', { p_numero: num, p_curso: curso, p_hasta: v.hasta, p_origen: v.plan },
+              r => MIRU.ui.aviso(U.esc(MIRU.planes.nombre(r.plan)) + ' hasta el ' + diaLocal(r.hasta) + '.'));
+            break;
+          }
+          case 'al-recordar': if (c) A.copiar(A.mensajeCobro(a, c)); break;
           case 'al-liberar':
             MIRU.ui.confirmar('¿Liberar el dispositivo de ' + a.nombre + '?', 'Ese dispositivo se cierra la próxima vez que abra miru con internet. Para entrar de nuevo necesitará un código.', 'Liberar',
               () => lla('admin_liberar_dispositivo', { p_numero: num }, () => MIRU.ui.aviso('Dispositivo liberado.')));
@@ -343,11 +473,12 @@
         const el = bit.querySelector('[data-bit]');
         try {
           const l = await AL().rpcAdmin('admin_bitacora', { p_limite: 60 });
-          const nombres = { crear_alumno: 'Creó alumno', editar_alumno: 'Editó alumno', habilitar_curso: 'Habilitó acceso', quitar_curso: 'Quitó acceso',
+          const nombres = { crear_alumno: 'Creó alumno', editar_alumno: 'Editó alumno', habilitar_curso: 'Cambió plan y fecha', renovar: 'Registró pago', quitar_curso: 'Quitó acceso',
             generar_codigo: 'Generó código', liberar_dispositivo: 'Liberó dispositivo', estado_alumno: 'Cambió estado', sugerencia: 'Actualizó sugerencia' };
           el.innerHTML = l.length ? '<ul class="respaldos">' + l.map(x => '<li><span>' + U.fechaCorta(x.creado_en) + ' · ' + U.esc(nombres[x.accion] || x.accion) +
             (x.detalle && x.detalle.numero ? ' · MIRU-' + String(x.detalle.numero).padStart(4, '0') : '') +
             (x.accion === 'sugerencia' && x.detalle && x.detalle.id ? ' · n.º ' + x.detalle.id : '') +
+            (x.detalle && x.detalle.origen ? ' · ' + U.esc(MIRU.planes.nombre(x.detalle.origen)) : '') +
             (x.detalle && x.detalle.hasta ? ' · hasta ' + diaLocal(x.detalle.hasta) : '') + (x.detalle && x.detalle.estado ? ' · ' + U.esc(x.detalle.estado) : '') + '</span></li>').join('') + '</ul>'
             : '<p class="nota">Sin acciones todavía.</p>';
         } catch (err) { el.innerHTML = '<p class="nota">⚠️ ' + U.esc(err.message) + '</p>'; }

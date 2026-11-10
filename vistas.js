@@ -487,7 +487,7 @@
     const cuenta = sb ? AL.cuenta() : null;
     const ligado = cuenta ? lista.find(x => x.id === cuenta.perfilId) : null;
     const est = AL.etiqueta();
-    const curso = cuenta ? (cuenta.cursos || []).find(x => x.curso === (MIRU_CFG().curso || 'cir1')) : null;
+    const acc = cuenta ? AL.acceso() : null;
     const nuevas = (MIRU.sugerencias && MIRU.sugerencias.nuevas) || 0;
     return '<header class="titulo-grande"><h1>Mi perfil</h1><p>' + U.esc(act ? act.nombre : '') + (cuenta ? ' · ' + U.esc(cuenta.codigo) : '') + '</p></header>' +
       grupo('', [
@@ -497,7 +497,10 @@
       (cuenta ? '<div class="tj"><h3>Tu cuenta miru</h3>' +
         '<p><strong>' + U.esc(cuenta.codigo) + '</strong> · ' + U.esc(cuenta.nombre) + '</p>' +
         '<p class="nota" data-sinc>' + est.i + ' ' + U.esc(est.t) + '</p>' +
-        '<p class="nota">' + (curso ? 'Acceso a Cirugía I hasta el ' + U.fecha(curso.hasta + 'T12:00:00') + '. ' : '') +
+        (acc ? '<p class="nota">Plan <strong>' + U.esc(MIRU.planes.nombre(acc.plan)) + '</strong> · acceso a Cirugía I hasta el ' + U.fecha(acc.hasta + 'T12:00:00') +
+          (acc.dias >= 0 ? ' (' + (acc.dias === 0 ? 'vence hoy' : acc.dias === 1 ? 'queda 1 día' : 'quedan ' + acc.dias + ' días') + ')' : '') + '.' +
+          (acc.dias >= 0 && acc.dias <= 3 ? ' <span class="eti eti--bad">Renueva pronto</span>' : '') + ' Al vencer, el contenido se cierra solo hasta que renueves.</p>' : '') +
+        '<p class="nota">' +
         'Este dispositivo (' + U.esc(AL.etiquetaDispositivo()) + ') es el único activo en tu cuenta: si activas miru en otro, este se cierra y tu progreso sincronizado te sigue.</p>' +
         '<div class="tira"><button class="btn btn--sm" data-acc="sincronizar" type="button">↻ Sincronizar ahora</button>' +
         '<button class="btn btn--sm btn--peligro" data-acc="cerrar-sesion" type="button">Cerrar sesión en este dispositivo</button></div></div>' : '') +
@@ -532,6 +535,7 @@
 
       '<div class="tj"><h3>Sobre miru</h3><p class="nota">' + U.esc(MIRU.contenido.etiqueta()) + ' · progreso esquema ' + MIRU.progreso.ESQUEMA + '</p>' +
       '<p class="nota">Contenido de estudio. No sustituye las clases, los libros ni las guías clínicas vigentes. Para el examen, vale lo que enseña tu docente.</p>' +
+      (sb ? '<details class="acor"><summary class="acor__b">Términos de uso</summary><div class="acor__c">' + AL.terminosHtml() + '</div></details>' : '') +
       '<div class="tira"><button class="btn btn--sm" data-acc="admin" type="button">' + (sb ? (admin ? '🛠 Cerrar sesión de administradora' : '🛠 Entrar como administradora') : (admin ? '🛠 Salir del modo administrador' : '🛠 Modo administrador')) + '</button>' +
       (admin ? '<button class="btn btn--sm" data-ir="#/admin" type="button">Abrir panel</button>' : '') + '</div></div>';
   };

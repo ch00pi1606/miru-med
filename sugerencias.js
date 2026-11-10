@@ -57,7 +57,7 @@
       return '<header class="titulo-grande"><h1>Sugerir una mejora</h1></header>' +
         (admin
           ? MIRU.ui.vacio('burbuja', 'Estás como administradora', 'Las sugerencias de tus alumnos llegan a <a href="#/admin">Administración</a>.')
-          : MIRU.ui.vacio('candado', 'Activa miru primero', 'Para enviar sugerencias, entra con tu número miru y el código de 1 minuto.'));
+          : MIRU.ui.vacio('candado', 'Activa miru primero', 'Para enviar sugerencias, entra con tu número miru y el código de 5 minutos.'));
     }
 
     return '<header class="titulo-grande"><h1>Sugerir una mejora</h1>' +

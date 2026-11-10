@@ -1042,6 +1042,45 @@ body.conAcceso { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 
+/* ------------------------------------------------- planes y cobros */
+.eti--aviso { background: var(--aviso-fondo); color: var(--aviso); }
+.eti--plan { background: var(--acento-suave); color: var(--acento); }
+.cobros { background: var(--aviso-fondo); border-radius: 14px; padding: 12px 14px; margin: 12px 0; }
+.cobros h4 { margin: 0 0 6px; }
+.cobros__l { list-style: none; margin: 6px 0 10px; padding: 0; display: grid; gap: 8px; }
+.cobro { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; background: var(--hoja); border-radius: 12px; padding: 10px 12px; }
+.cobro .tira { margin: 0; }
+.cobro--vencido { box-shadow: inset 3px 0 0 var(--mal); }
+.cobro--pronto { box-shadow: inset 3px 0 0 var(--aviso); }
+.opciones { display: grid; gap: 8px; margin: 10px 0; }
+.opciones label { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--hundido); cursor: pointer; font-weight: 500; }
+.opciones label:has(input:checked) { background: var(--acento-suave); color: var(--acento); }
+.campo--check { flex-direction: row; align-items: flex-start; gap: 10px; font-size: .875rem; }
+.campo--check input { margin-top: 3px; flex: none; }
+#dialogo-extra { margin: 4px 0 8px; }
+#dialogo-extra .campo { margin: 10px 0; }
+.avisoAcceso { display: flex; gap: 10px; align-items: flex-start; margin: 10px 16px 0; padding: 11px 14px; border-radius: 14px; background: var(--aviso-fondo); color: var(--tinta); font-size: .9rem; line-height: 1.45; }
+.avisoAcceso[hidden] { display: none; }
+.avisoAcceso strong { color: var(--aviso); }
+
+/* --------------------------------------------- términos al activar */
+.acceso__terminos { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 4px; font-size: .85rem; line-height: 1.45; color: var(--tinta-suave); text-align: left; }
+.acceso__terminos input { margin-top: 3px; flex: none; width: 18px; height: 18px; accent-color: var(--acento); }
+.acceso__enlace { background: none; border: 0; padding: 0; font: inherit; color: var(--acento); text-decoration: underline; cursor: pointer; }
+.acceso__textoTerminos { margin: 6px 0 4px; padding: 10px 12px; border-radius: 12px; background: var(--hundido); font-size: .8rem; line-height: 1.5; text-align: left; }
+.acceso__textoTerminos ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* ------------------------------------------- protección del contenido */
+.marca-agua { position: fixed; inset: 0; z-index: 260; pointer-events: none; background-repeat: repeat; background-size: 340px 200px; opacity: .085; }
+[data-theme="dark"] .marca-agua { opacity: .13; }
+body.protegido .principal, body.protegido .lateral, body.protegido dialog, body.protegido .acceso {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+body.protegido input, body.protegido textarea, body.protegido select, body.protegido [contenteditable="true"] {
+  -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
+}
+body.protegido img, body.protegido svg { -webkit-user-drag: none; user-drag: none; }
+
 /* -------------------------------------------------------------- impresión */
 @media print {
   @page { margin: 14mm; }
@@ -1056,4 +1095,7 @@ body.conAcceso { overflow: hidden; }
   .lamina { break-inside: avoid; }
   .r-enunciado { -webkit-line-clamp: unset !important; display: block; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Alumnos: no se imprime ni se guarda en PDF */
+  body.protegido > * { display: none !important; }
+  body.protegido::before { content: "El contenido de miru es de uso personal y no se puede imprimir ni guardar."; display: block; padding: 40mm 10mm; text-align: center; font-size: 14pt; color: #444; }
 }
