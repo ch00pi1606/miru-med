@@ -142,7 +142,9 @@
         guardarSesion(cual, r);
         return r.access_token;
       } catch (e) {
-        if (e.codigo !== SIN_RED && e.estado >= 400 && e.estado < 500) {
+        // Solo un rechazo definitivo cierra la sesión. Un corte de red, un
+        // «espera un momento» (408/429) o una caída del servidor no.
+        if (e.codigo !== SIN_RED && e.estado >= 400 && e.estado < 500 && e.estado !== 408 && e.estado !== 429) {
           escribir(K[cual], null);
           throw new ErrorMiru('La sesión se cerró en el servidor.', SIN_SESION, e.estado);
         }
@@ -151,7 +153,7 @@
     });
   }
 
-  async function rpc(cual, fn, args) {
+  async function rpcUnaVez(cual, fn, args) {
     let tk = await token(cual);
     try { return await pedir('/rest/v1/rpc/' + fn, args || {}, tk); }
     catch (e) {
@@ -159,6 +161,77 @@
       tk = await token(cual, true);
       return pedir('/rest/v1/rpc/' + fn, args || {}, tk);
     }
+  }
+
+  /* Si la sesión anónima del alumno se perdió, este mismo dispositivo
+     vuelve a entrar con su secreto, sin código (ver reanudar). */
+  const SIN_REANUDAR = ['canjear_codigo', 'reanudar_dispositivo', 'registrar_secreto'];
+  async function rpc(cual, fn, args) {
+    try { return await rpcUnaVez(cual, fn, args); }
+    catch (e) {
+      if (e.codigo !== SIN_SESION || cual !== 'sesion' || SIN_REANUDAR.indexOf(fn) >= 0 || !leer(K.cuenta)) throw e;
+      const ok = await reanudar();
+      if (ok === null) throw new ErrorMiru('Sin conexión con el servidor. Revisa tu internet e intenta de nuevo.', SIN_RED);
+      if (!ok) throw e;
+      return rpcUnaVez(cual, fn, args);
+    }
+  }
+
+  /* ------------------------------------------- secreto del dispositivo
+     Al activar, el dispositivo crea un secreto propio (32 bytes al azar) y
+     el servidor guarda solo su huella. Si algún día la sesión anónima se
+     pierde (Supabase la cierra, se borra, etc.), el dispositivo crea otra y
+     se vuelve a ligar con ese secreto: NO hace falta código. Solo si el
+     alumno activó otro dispositivo, o la administradora liberó o suspendió
+     este, el servidor dice que no y se pide un código nuevo. */
+  function nuevoSecreto() {
+    const b = new Uint8Array(32);
+    global.crypto.getRandomValues(b);
+    return btoa(String.fromCharCode.apply(null, b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  let reanudando = null;
+  /** true: listo · false: el servidor dice que este dispositivo ya no vale · null: sin red. */
+  function reanudar() {
+    if (!reanudando) {
+      reanudando = conCandado('miru-reanudar', async () => {
+        // Otra pestaña ya creó una sesión nueva mientras esperábamos
+        if (leer(K.sesion)) return true;
+        const c = leer(K.cuenta);
+        if (!c || !c.secreto) return false;
+        try {
+          await asegurarSesionAnonima();
+          const r = await rpcUnaVez('sesion', 'reanudar_dispositivo', { p_dispositivo: c.dispositivo, p_secreto: c.secreto });
+          if (r && r.ok) return true;
+          if (r && r.error) A.motivoCierre = r.error;
+          escribir(K.sesion, null);
+          return false;
+        } catch (e) {
+          // La sesión nueva aún no está ligada: se descarta y se reintenta después
+          escribir(K.sesion, null);
+          if (e.codigo === SIN_RED || e.estado >= 500 || e.estado === 408 || e.estado === 429) return null;
+          return false;
+        }
+      }).finally(() => { reanudando = null; });
+    }
+    return reanudando;
+  }
+
+  /** Registra en el servidor el secreto de este dispositivo (una sola vez). */
+  async function asegurarSecreto() {
+    const c = leer(K.cuenta);
+    if (!c || c.secretoOk || !global.crypto || !crypto.getRandomValues) return;
+    if (!c.secreto) { c.secreto = nuevoSecreto(); escribir(K.cuenta, c); }
+    try {
+      const r = await rpcUnaVez('sesion', 'registrar_secreto', { p_dispositivo: c.dispositivo, p_secreto: c.secreto });
+      const c2 = leer(K.cuenta);
+      if (r && r.ok && c2 && c2.dispositivo === c.dispositivo) { c2.secretoOk = true; escribir(K.cuenta, c2); }
+    } catch (e) { /* servidor sin la versión nueva de miru.sql, o sin red: se reintenta al próximo latido */ }
+  }
+
+  /** Pide al navegador que no borre los datos de miru para liberar espacio. */
+  function pedirPersistencia() {
+    try { if (global.navigator && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
   }
 
   function etiquetaDispositivo() {
@@ -216,6 +289,8 @@
       dispositivo: r.dispositivo, activado: Date.now(), ultimoOk: Date.now(), version: null,
       cursos: cursos.map(x => ({ curso: x.curso, hasta: x.hasta, plan: x.plan, id_llave: x.id_llave }))
     });
+    pedirPersistencia();
+    await asegurarSecreto();
     return llaveDe(cursos, idLlave, true);
   };
 
@@ -238,19 +313,32 @@
   A.recuperarLlave = async function (idLlave) {
     if (A.modo !== 'supabase' || !configurado()) return null;
     if (leer(K.cuenta)) {
-      try {
-        const cuenta = leer(K.cuenta);
-        const r = await rpc('sesion', 'latido', { p_dispositivo: cuenta.dispositivo });
-        if (!r.activo) { olvidarCuenta(); return null; }
-        guardarAccesos(r);
-        // Dispositivo bien, pero el acceso venció: no se pide código, se avisa
-        if (!(r.cursos || []).some(x => x.curso === CURSO)) return pantallaVencido(accesoLocal(), false);
-        return llaveDe(r.cursos, idLlave, false);
-      } catch (e) {
-        if (e.codigo === SIN_SESION) { olvidarCuenta(); return null; }
-        // Sin red y sin llave guardada: si según este dispositivo ya venció, se dice
-        if (vencioLocal()) return pantallaVencido(accesoLocal(), true);
-        return null;
+      // El código solo se vuelve a pedir si el servidor dice que este
+      // dispositivo ya no es el activo. Un corte de red o una caída del
+      // servidor NO borran la cuenta: se espera y se reintenta.
+      for (;;) {
+        try {
+          const cuenta = leer(K.cuenta);
+          const r = await rpc('sesion', 'latido', { p_dispositivo: cuenta.dispositivo });
+          if (!r.activo) { A.motivoCierre = r.motivo || ''; olvidarCuenta(); return null; }
+          guardarAccesos(r);
+          asegurarSecreto();
+          // Dispositivo bien, pero el acceso venció: no se pide código, se avisa
+          if (!(r.cursos || []).some(x => x.curso === CURSO)) return pantallaVencido(accesoLocal(), false);
+          const ll = llaveDe(r.cursos, idLlave, false);
+          if (ll || !idLlave) return ll;
+          // Acceso vigente pero la llave del servidor no es la de esta publicación:
+          // con un código tampoco se arreglaría, así que se dice qué pasa
+          await pantallaReintentar('No se pudo abrir el contenido',
+            'Tu dispositivo sigue activado, pero el servidor todavía no tiene la llave de esta versión de miru. Avísale a la administradora y pulsa «Reintentar». No necesitas otro código.');
+        } catch (e) {
+          if (e.codigo === SIN_SESION) { olvidarCuenta(); return null; }
+          // Sin red y sin llave guardada: si según este dispositivo ya venció, se dice
+          if (vencioLocal()) return pantallaVencido(accesoLocal(), true);
+          await pantallaReintentar('No se pudo comprobar tu acceso',
+            (e.codigo === SIN_RED ? 'Parece que no hay internet. ' : 'El servidor no respondió. ') +
+            'Tu dispositivo sigue activado: conéctate y pulsa «Reintentar». No necesitas otro código.');
+        }
       }
     }
     if (leer(K.admin)) {
@@ -336,12 +424,13 @@
     let r;
     try { r = await rpc('sesion', 'latido', { p_dispositivo: cuenta.dispositivo }); }
     catch (e) {
-      if (e.codigo === SIN_SESION) { await expulsar('La sesión de este dispositivo ya no es válida. Pide un código nuevo a la administradora.'); return false; }
+      if (e.codigo === SIN_SESION) { await expulsar(A.motivoCierre || 'La sesión de este dispositivo ya no es válida. Pide un código nuevo a la administradora.'); return false; }
       A.estado = e.codigo === SIN_RED ? 'sin-conexion' : 'error'; A.error = e.message; avisar();
       return null;
     }
     if (!r.activo) { await expulsar(r.motivo); return false; }
     guardarAccesos(r);
+    asegurarSecreto();
     if (!(r.cursos || []).some(x => x.curso === CURSO)) {
       await bloquearVencido(false);
       return false;
@@ -635,6 +724,13 @@
       (pie ? '<p class="acceso__pie">' + esc(pie) + '</p>' : ''));
     v.querySelector('button').addEventListener('click', () => alPulsar(v));
     return v;
+  }
+
+  /** Mensaje con «Reintentar» que NO borra nada ni pide código. */
+  function pantallaReintentar(titulo, texto) {
+    return new Promise(resolve => {
+      pantallaMensaje(titulo, texto, 'Tu progreso está a salvo en este dispositivo.', 'Reintentar', v => { desmontar(v); resolve(); });
+    });
   }
 
   function pantallaSinRed() {
