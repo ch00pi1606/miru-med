@@ -40,22 +40,13 @@
       subtitulo: '10 preguntas de una sola especialidad',
       modulos: m => [m],
       porModulo: 10, minutos: 10
-    },
-    // Como el test semanal de los viernes: 50 preguntas en 25 minutos,
-    // solo de las clases de una semana de Generalidades.
-    semanal: {
-      titulo: 'Examen semanal',
-      subtitulo: '50 preguntas de las clases de la semana, como el test de los viernes',
-      modulos: m => [m],
-      porModulo: 50, minutos: 25, minimo: 50
     }
   };
 
   const E = MIRU.evaluacion = { REGLAS, TIPOS };
 
   /* ------------------------------------------------------------ ayudas */
-  const conModulo = t => t === 'rotacion' || t === 'semanal';
-  const tipoDe = (tipo, mod) => conModulo(tipo) ? tipo + ':' + mod : tipo;
+  const tipoDe = (tipo, mod) => tipo === 'rotacion' ? 'rotacion:' + mod : tipo;
   const cfgDe = tipo => TIPOS[tipo.split(':')[0]];
   const modulosDe = clave => { const [t, m] = clave.split(':'); return TIPOS[t].modulos(m); };
   const nombreMod = id => { const m = MIRU.modulo(id); return m ? m.nombre : id; };
@@ -67,8 +58,6 @@
     return MIRU.clasesDe(modId).map(c => ({ clase: c, pool: MIRU.preguntasDeClase(c.id, 'simulacro') })).filter(u => u.pool.length);
   }
   E.disponible = function (clave) {
-    const cfg = cfgDe(clave);
-    if (cfg.minimo) return E.tamanoBanco(clave) >= cfg.minimo;
     return modulosDe(clave).some(m => unidades(m).length);
   };
   E.tamanoBanco = function (clave) {
@@ -184,10 +173,10 @@
     const mods = modulosDe(clave);
     const hist = historial(clave);
     const ses = MIRU.progreso.sesion();
-    const nTotal = cfg.porModulo ? mods.reduce((s, m) => s + Math.min(cfg.porModulo, MIRU.preguntasDeModulo(m, 'simulacro').length), 0) : cfg.total;
+    const nTotal = cfg.porModulo ? cfg.porModulo * mods.filter(m => unidades(m).length).length : cfg.total;
     const refuerzo = E.refuerzoActivo(clave);
     const faltan = Math.max(0, REGLAS.INTENTOS_PARA_REFUERZO - hist.length);
-    const titulo = tituloClave(clave);
+    const titulo = tipo === 'rotacion' ? 'Repaso de ' + nombreMod(modId) : cfg.titulo;
     const disponible = E.disponible(clave);
 
     const columnas = mods.map(m => {
@@ -212,7 +201,7 @@
     }).join('');
 
     const acciones = !disponible
-      ? '<p class="aviso">Todavía no hay preguntas suficientes para ' + (cfg.minimo ? 'armar un examen de ' + cfg.minimo + ' (hay ' + E.tamanoBanco(clave) + ')' : 'este simulacro') + '. Se activará cuando haya contenido.</p>'
+      ? '<p class="aviso">Todavía no hay preguntas suficientes para este simulacro. Se activará cuando haya contenido.</p>'
       : ses
         ? (ses.clave === clave
           ? '<button class="boton boton-grande" data-acc="continuar" type="button">Continuar el simulacro en curso</button>' +
@@ -238,7 +227,6 @@
         '<article class="tarjeta"><h2>Mi progreso</h2>' + grafico(hist) + listaHistorial(hist) + '</article>' +
         '<aside class="tarjeta recuerda"><h2>Cómo funciona</h2><ul>' +
           '<li>Un solo reloj de ' + cfg.minutos + ' minutos para todo. Al acabarse, se entrega solo.</li>' +
-          (tipo === 'semanal' ? '<li>Son 30 segundos por pregunta, como el test de los viernes: si una te traba, márcala y sigue.</li>' : '') +
           '<li>No verás si acertaste hasta entregar, como en el examen.</li>' +
           '<li>Puedes saltar, volver y marcar preguntas para revisarlas.</li>' +
           '<li>En la revisión ves por qué es correcta cada respuesta, por qué no lo es la tuya y de dónde sale el dato.</li>' +
@@ -259,9 +247,7 @@
 
   function tituloClave(clave) {
     const [t, m] = clave.split(':');
-    if (t === 'rotacion') return 'Repaso de ' + nombreMod(m);
-    if (t === 'semanal') return 'Examen semanal · ' + nombreMod(m);
-    return TIPOS[t].titulo;
+    return t === 'rotacion' ? 'Repaso de ' + nombreMod(m) : TIPOS[t].titulo;
   }
   E.tituloClave = tituloClave;
 
