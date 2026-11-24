@@ -154,7 +154,7 @@
       case 'flashcards': return vistaFlashcards(p[1], p[2], migas);
       case 'simulacros': migas.push({ t: 'Simulacros' }); return pintar(V.simulacros(), migas, ruta);
       case 'simulacro': {
-        migas.push({ t: 'Simulacros', h: '#/simulacros' }, { t: MIRU.evaluacion.tituloClave(p[1] === 'rotacion' ? 'rotacion:' + p[2] : p[1]) });
+        migas.push({ t: 'Simulacros', h: '#/simulacros' }, { t: MIRU.evaluacion.tituloClave((p[1] === 'rotacion' || p[1] === 'semanal') ? p[1] + ':' + p[2] : p[1]) });
         pintar('<div id="zonaSim"></div>', migas, ruta);
         return MIRU.evaluacion.inicio(document.getElementById('zonaSim'), p[1], p[2]);
       }

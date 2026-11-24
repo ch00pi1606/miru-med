@@ -5,7 +5,7 @@
    · Íconos e imágenes: primero la copia guardada.
    La herramienta de construcción reemplaza VERSION en cada publicación.
    ========================================================================= */
-const VERSION = 'miru-2026.11.12-4';
+const VERSION = 'miru-2026.11.24-1';
 const BASICOS = [
   './', './index.html', './manifest.webmanifest',
   'miru.css',
