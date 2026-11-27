@@ -135,7 +135,9 @@
 
     const evaluar = [fila({ href: '#/simulacro/especialidades', ico: icoFijo('reloj'), t: 'Simulacro de Especialidades', s: '40 preguntas · 40 min', v: ultima('especialidades') })];
     if (E.disponible('generalidades')) evaluar.push(fila({ href: '#/simulacro/generalidades', ico: icoFijo('reloj', 'lila'), t: 'Simulacro de Generalidades', s: '40 preguntas · 40 min', v: ultima('generalidades') }));
-    evaluar.push(fila({ href: '#/simulacros', ico: icoFijo('cuadricula', 'pizarra'), t: 'Todos los simulacros', s: 'Repasos de 10 preguntas por rotación o semana' }));
+    const mSem = sem && gen[sem - 1];
+    if (mSem && E.disponible('semanal:' + mSem.id)) evaluar.push(fila({ href: '#/simulacro/semanal/' + mSem.id, ico: icoFijo('reloj', 'lila'), t: 'Examen semanal · ' + mSem.nombre, s: '50 preguntas · 25 min', v: ultima('semanal:' + mSem.id) }));
+    evaluar.push(fila({ href: '#/simulacros', ico: icoFijo('cuadricula', 'pizarra'), t: 'Todos los simulacros', s: 'Exámenes semanales y repasos de 10 preguntas' }));
 
     return '<header class="titulo-grande"><h1>Mi semestre</h1>' +
       '<p>' + U.esc(MIRU.datos.curso.nombre) + (sem ? ' · semana ' + sem : '') + (per && per.nombre ? ' · ' + U.esc(per.nombre) : '') + '</p></header>' +
@@ -208,6 +210,7 @@
       '<h1>' + U.esc(m.nombre) + '</h1>' +
       '<p class="nota">' + clases.length + ' clases · ' + MIRU.temasDe(m.id).length + ' temas · ' + MIRU.preguntasDeModulo(m.id).length + ' preguntas</p></div>' +
       '<div class="tira">' +
+      (!esEsp && MIRU.evaluacion.disponible('semanal:' + m.id) ? '<button class="btn" data-ir="#/simulacro/semanal/' + m.id + '" type="button">📝 Examen semanal (50 · 25 min)</button>' : '') +
       (nSim >= 5 ? '<button class="btn" data-ir="#/simulacro/rotacion/' + m.id + '" type="button">⏱ ' + (esEsp ? 'Repaso de la rotación' : 'Repaso de la semana') + ' (10 · 10 min)</button>' : '') +
       '<button class="btn" data-ir="#/repaso/' + m.id + '" type="button">🔁 Errores</button>' +
       (m.oral ? '<button class="btn" data-ir="#/oral/' + m.id + '" type="button">🎤 Simulacro oral</button>' : '') +
@@ -421,6 +424,8 @@
       '<div class="rejilla">' +
       tarjeta('especialidades', 'Simulacro de Especialidades', '40 preguntas · 40 minutos · 10 por especialidad.', '#/simulacro/especialidades') +
       tarjeta('generalidades', 'Simulacro de Generalidades', '40 preguntas · 40 minutos · repartidas entre las clases que ya tienen preguntas.', '#/simulacro/generalidades') +
+      '</div><h2 class="cinta">Examen semanal de Generalidades</h2><p class="ayuda">50 preguntas · 25 minutos, solo de las clases de esa semana, como el test de los viernes.</p><div class="rejilla">' +
+      gen.map(m => tarjeta('semanal:' + m.id, 'Examen semanal · ' + m.nombre, 'Clases ' + MIRU.clasesDe(m.id).map(c => c.numero).join(', '), '#/simulacro/semanal/' + m.id)).join('') +
       '</div><h2 class="cinta">Repaso de una rotación o semana</h2><p class="ayuda">10 preguntas · 10 minutos, de un solo módulo.</p><div class="rejilla">' +
       esp.concat(gen).map(m => tarjeta('rotacion:' + m.id, m.nombre, (m.bloque === 'generalidades' ? 'Semana de Generalidades' : 'Especialidad'), '#/simulacro/rotacion/' + m.id)).join('') +
       '</div>';
